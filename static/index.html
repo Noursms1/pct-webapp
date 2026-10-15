@@ -704,7 +704,14 @@ function renderOsint(r){
           <div class="hint">الإصدار: ${esc(r.ssl.tls_version||"")} · Cipher: <code>${esc(r.ssl.cipher||"")}</code></div>
           <div class="hint">صلاحية: ${esc(r.ssl.not_before||"")} → ${esc(r.ssl.not_after||"")}</div>
           <div class="hint">الأيام المتبقية: <b style="color:${(r.ssl.days_left??999)<15?'var(--red)':'var(--green)'}">${r.ssl.days_left ?? "—"}</b></div>
-          ${(r.ssl.san||[]).length?`<div class="hint">SAN: <code>${r.ssl.san.map(esc).join(", ")}</code></div>`:""}
+          ${(r.ssl.san||[]).length?`<div class="hint">SAN (${r.ssl.san_count||r.ssl.san.length}): <code>${r.ssl.san.slice(0,20).map(esc).join(", ")}${r.ssl.san.length>20?` … +${r.ssl.san.length-20} more`:""}</code></div>`:""}
+          ${r.ssl.san_match !== undefined ? `
+            <div class="hint">
+              تطابق SAN: <b style="color:${r.ssl.san_match?'var(--green)':'var(--red)'}">
+                ${r.ssl.san_match ? '✔ مطابق' : '✘ غير مطابق'}
+              </b>${r.ssl.san_match_type ? ` <code>(${esc(r.ssl.san_match_type)})</code>` : ''}
+            </div>
+          ` : ''}
         ` : `<div class="empty">${esc((r.ssl&&r.ssl.error)||"لم يتم فحص الشهادة.")}</div>`}
       </div>
     </div>`;

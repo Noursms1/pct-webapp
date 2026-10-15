@@ -8,7 +8,7 @@ PCT is a Python cybersecurity toolkit combining static code analysis, a TCP port
 
 ## Features
 
-- Secure Code Reviewer with SAST rules for SQL injection, XSS, command injection, secrets, path traversal, unsafe deserialization, weak cryptography, debug mode, and related issues.
+- Secure Code Reviewer with a hybrid SAST engine: regex rules for line-level patterns plus an AST taint analyzer that tracks tainted variables across statements and detects hidden SQLi, command injection, path traversal, deserialization, and SSRF.
 - Multi-threaded TCP Network Scanner with fast, full, and custom modes, optional banners, and risky-port tagging.
 - OSINT/DNS Recon with forward and reverse DNS, A/AAAA/MX/NS/TXT/CNAME records, HTTP header auditing, TLS certificate inspection, RFC 6125 SAN matching, robots.txt, security.txt, and Whois.
 - Hash Matcher supporting hash identification, generation, and wordlist matching.

@@ -9,6 +9,8 @@
 
 import re
 
+from .code_analyzer import analyze_ast
+
 
 # ===========================================================================
 # Rule Engine / محرك القواعد
@@ -175,6 +177,16 @@ def _mask_secret(snippet):
     )
 
 
+def _dedup_regex_and_ast(findings):
+    seen = {}
+    for finding in findings:
+        rule_id = (finding.get("rule_id") or finding.get("type") or "").replace("_AST", "")
+        key = (finding.get("line"), rule_id.lower())
+        if key not in seen:
+            seen[key] = finding
+    return list(seen.values())
+
+
 def scan_code_text(code_text, filename=None):
     """فحص نص كود واحد وإرجاع قائمة النتائج."""
     findings = []
@@ -202,7 +214,12 @@ def scan_code_text(code_text, filename=None):
                     "fix": rule["fix"],
                 }
             )
-    return findings
+    ast_findings = analyze_ast(code_text)
+    for finding in ast_findings:
+        finding["file"] = filename
+    merged = _dedup_regex_and_ast(findings + ast_findings)
+    merged.sort(key=lambda f: SEVERITY_ORDER.get(f["severity"], 9))
+    return merged
 
 
 def scan_code(job, params):

@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCT — Portable Cybersecurity Toolkit</title>
+<style>
+  :root{
+    --bg:#0b1020; --bg2:#121a2f; --card:#141c33; --line:#233052;
+    --txt:#e6ecff; --muted:#8fa0c4; --cyan:#22d3ee; --green:#22c55e;
+    --yellow:#facc15; --red:#ef4444; --orange:#fb923c; --purple:#a855f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Tahoma,system-ui,sans-serif;
+       background:linear-gradient(180deg,#0b1020,#0e1526 60%,#0b1020);
+       color:var(--txt);min-height:100vh}
+  header{background:var(--bg2);border-bottom:1px solid var(--line);
+         padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+         position:sticky;top:0;z-index:20}
+  .logo{font-weight:800;font-size:20px;letter-spacing:1px;color:var(--cyan)}
+  .logo span{color:var(--txt)}
+  .badge{font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--line);
+         background:#0e1729;color:var(--muted)}
+  .badge.up{color:var(--green);border-color:#1f5136}
+  .badge.down{color:var(--red);border-color:#5b2222}
+  .grow{flex:1}
+  .tokenbox{display:flex;gap:6px;align-items:center}
+  input,select,textarea,button{font-family:inherit;font-size:14px}
+  input,select,textarea{background:#0c1425;border:1px solid var(--line);color:var(--txt);
+       border-radius:8px;padding:9px 11px;outline:none;width:100%}
+  input:focus,select:focus,textarea:focus{border-color:var(--cyan)}
+  textarea{resize:vertical;font-family:Consolas,Menlo,monospace;direction:ltr;text-align:left}
+  button{background:#1b2745;border:1px solid var(--line);color:var(--txt);
+         border-radius:8px;padding:9px 16px;cursor:pointer;transition:.15s}
+  button:hover{background:#243159;border-color:var(--cyan)}
+  button.primary{background:linear-gradient(90deg,#0891b2,#0e7490);border-color:#22d3ee;
+                 font-weight:700}
+  button.primary:hover{filter:brightness(1.15)}
+  button.danger{border-color:#7f1d1d;color:#fca5a5}
+  button.small{padding:5px 10px;font-size:12px}
+  nav{display:flex;gap:8px;padding:14px 20px;flex-wrap:wrap;border-bottom:1px solid var(--line);
+      background:#0d1526;position:sticky;top:61px;z-index:15}
+  nav button{border-radius:20px;padding:8px 16px;font-size:13px}
+  nav button.active{background:#0e7490;border-color:var(--cyan);color:#fff;font-weight:700}
+  main{padding:20px;max-width:1400px;margin:0 auto}
+  section{display:none;animation:fade .2s ease}
+  section.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        padding:18px;margin-bottom:18px}
+  .card h2{margin:0 0 4px;font-size:17px;color:var(--cyan)}
+  .card p.hint{margin:0 0 14px;color:var(--muted);font-size:13px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:13px;color:var(--muted)}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .check input{width:auto}
+  .stat{background:#0f1a30;border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+  .stat b{display:block;font-size:26px;color:var(--cyan)}
+  .stat span{font-size:12px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:right;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;background:#0f1a30;position:sticky;top:0}
+  tr:hover td{background:#16203a}
+  code,.mono{font-family:Consolas,Menlo,monospace;direction:ltr;text-align:left;display:inline-block}
+  pre{background:#080d1a;border:1px solid var(--line);border-radius:10px;padding:12px;
+      overflow:auto;max-height:340px;font-size:12.5px;direction:ltr;text-align:left;margin:0}
+  .sev-critical{color:var(--red);font-weight:700}
+  .sev-high{color:var(--orange);font-weight:700}
+  .sev-medium{color:var(--yellow)}
+  .sev-low{color:var(--muted)}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
+        border:1px solid var(--line);background:#0e1729;margin:2px}
+  .pill.critical{border-color:#7f1d1d;color:#fca5a5}
+  .pill.high{border-color:#7c4a1e;color:#fdba74}
+  .pill.medium{border-color:#6b6414;color:#fde68a}
+  .pill.low{border-color:#334155;color:var(--muted)}
+  .pill.open{border-color:#166534;color:#86efac}
+  .pill.risky{border-color:#7f1d1d;color:#fca5a5}
+  .bar{height:9px;background:#0a1120;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0891b2,#22d3ee);
+         transition:width .25s}
+  .jobline{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);
+           border-radius:10px;background:#0f1a30;margin-bottom:8px;flex-wrap:wrap}
+  .jobline .st{font-size:12px;padding:2px 8px;border-radius:20px;background:#0c1425;border:1px solid var(--line)}
+  .st.running{color:var(--cyan)} .st.done{color:var(--green)}
+  .st.error{color:var(--red)} .st.cancelled{color:var(--muted)}
+  .empty{color:var(--muted);font-size:13px;padding:10px 0}
+  .alert{background:#2a1a12;border:1px solid #7c4a1e;color:#fdba74;padding:10px 12px;
+         border-radius:10px;margin-bottom:8px;font-size:13px}
+  .alert.info{background:#0f2033;border-color:#155e75;color:#a5f3fc}
+  .grade{font-size:44px;font-weight:800;line-height:1}
+  .grade.A{color:var(--green)} .grade.B{color:#86efac} .grade.C{color:var(--yellow)}
+  .grade.D{color:var(--orange)} .grade.F{color:var(--red)}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+  .divider{height:1px;background:var(--line);margin:14px 0}
+  .flex-between{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PCT<span> / Portable Cybersecurity Toolkit</span></div>
+  <div id="health" class="badge">جارٍ الاتصال...</div>
+  <div class="grow"></div>
+  <div class="tokenbox">
+    <input id="token" placeholder="API Token (اختياري)" style="width:180px">
+    <button class="small" onclick="saveToken()">حفظ</button>
+  </div>
+  <div class="grow"></div>
+  <div class="badge" id="activeJobs">مهام نشطة: 0</div>
+</header>
+
+<nav>
+  <button data-tab="dash" class="active">لوحة التحكم</button>
+  <button data-tab="code">تحليل الأكواد</button>
+  <button data-tab="net">فحص الشبكة</button>
+  <button data-tab="osint">OSINT / DNS</button>
+  <button data-tab="hash">الهاشات</button>
+  <button data-tab="jobs">المهام الحية</button>
+  <button data-tab="history">سجل الفحوصات</button>
+</nav>
+
+<main>
+
+<!-- ==================== Dashboard ==================== -->
+<section id="tab-dash" class="active">
+  <div class="card">
+    <h2>نظرة عامة</h2>
+    <p class="hint">حالة المحرك والسيرفر وإحصاءات الفحوصات.</p>
+    <div class="grid g4">
+      <div class="stat"><b id="s-total">0</b><span>فحص مسجّل</span></div>
+      <div class="stat"><b id="s-active">0</b><span>مهمة نشطة</span></div>
+      <div class="stat"><b id="s-rules">0</b><span>قاعدة تحليل كود</span></div>
+      <div class="stat"><b id="s-ports">0</b><span>منفذ شائع</span></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h2>توزيع الفحوصات</h2>
+      <p class="hint">عدد الفحوصات لكل وحدة من المحرك.</p>
+      <div id="byType" class="empty">لا توجد بيانات بعد.</div>
+    </div>
+    <div class="card">
+      <h2>منافذ عالية الخطورة</h2>
+      <p class="hint">منافذ تُعتبر خطراً إذا ظهرت مفتوحة للإنترنت.</p>
+      <div id="riskyPorts"></div>
+      <div class="divider"></div>
+      <h2>المنافذ الشائعة المفحوصة (Fast)</h2>
+      <div id="commonPorts"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>قواعد تحليل الأكواد</h2>
+    <p class="hint">محرك القواعد المستخدم في وحدة Secure Code Reviewer.</p>
+    <table>
+      <thead><tr><th>الخطورة</th><th>الثغرة</th><th>CWE</th><th>الوصف</th></tr></thead>
+      <tbody id="rulesBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================== Code Reviewer ==================== -->
+<section id="tab-code">
+  <div class="card">
+    <h2>تحليل الأكواد — Secure Code Reviewer</h2>
+    <p class="hint">الصق الكود أو ارفع ملفات (يمكن اختيار عدة ملفات). المحرك يفحص الأكواد سطراً سطراً بقواعد كشف ثغرات SAST.</p>
+    <div class="grid g2">
+      <div class="field">
+        <label>اسم الملف / التسمية</label>
+        <input id="code-name" placeholder="inline_code" value="inline_code">
+      </div>
+      <div class="field">
+        <label>رفع ملفات كود (اختياري)</label>
+        <input id="code-files" type="file" multiple>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="field">
+      <label>الكود</label>
+      <textarea id="code-text" rows="14" placeholder="# الصق الكود هنا..."></textarea>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" onclick="runCode()">تحليل الكود</button>
+      <button onclick="loadSampleCode()">تحميل مثال ملوّث</button>
+      <button onclick="document.getElementById('code-text').value='';">مسح</button>
+      <span id="code-filecount" class="badge">0 ملف مرفوع</span>
+    </div>
+  </div>
+  <div class="card" id="code-result-card" style="display:none">
+    <h2>نتائج التحليل</h2>
+    <div id="code-summary" class="row" style="margin-bottom:12px"></div>
+    <div id="code-findings"></div>
+  </div>
+</section>
+
+<!-- ==================== Network Scanner ==================== -->
+<section id="tab-net">
+  <div class="card">
+    <h2>فحص الشبكة — Network Scanner</h2>
+    <p class="hint">فحص TCP Connect على المنافذ بمعالجة متعددة الخيوط، مع جلب Banner الخدمة ووسم المنافذ عالية الخطورة.</p>
+    <div class="grid g3">
+      <div class="field">
+        <label>الهدف (IP أو Domain)</label>
+        <input id="net-target" placeholder="example.com" style="direction:ltr;text-align:left">
+      </div>
+      <div class="field">
+        <label>نمط الفحص</label>
+        <select id="net-mode">
+          <option value="fast">Fast — منافذ شائعة</option>
+          <option value="full">Full — 1-65535 (بطيء)</option>
+          <option value="custom">Custom — منافذ مخصصة</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>مهلة الاتصال (ثانية)</label>
+        <input id="net-timeout" type="number" value="1.0" step="0.1" min="0.1" max="10">
+      </div>
+      <div class="field">
+        <label>أقصى عدد خيوط</label>
+        <input id="net-threads" type="number" value="200" min="10" max="800">
+      </div>
+      <div class="field">
+        <label>منافذ مخصصة (للنمط Custom)</label>
+        <input id="net-ports" placeholder="22,80,443,8080-8090" style="direction:ltr;text-align:left">
+      </div>
+      <div class="field">
+        <label>خيارات</label>
+        <label class="check"><input type="checkbox" id="net-banner"> جلب Banner الخدمات</label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" onclick="runNetwork()">بدء الفحص</button>
+      <span class="badge">تنبيه: افحص فقط الأنظمة التي تملك تصريحاً بفحصها.</span>
+    </div>
+  </div>
+  <div class="card" id="net-result-card" style="display:none">
+    <h2>نتائج فحص الشبكة</h2>
+    <div id="net-summary" class="row" style="margin-bottom:12px"></div>
+    <div id="net-alerts"></div>
+    <div id="net-table"></div>
+  </div>
+</section>
+
+<!-- ==================== OSINT ==================== -->
+<section id="tab-osint">
+  <div class="card">
+    <h2>OSINT / DNS Recon</h2>
+    <p class="hint">Forward/Reverse DNS، سجلات DNS، ترويسات HTTP وتدقيقها الأمني، شهادة TLS، robots.txt و security.txt، وWhois.</p>
+    <div class="grid g3">
+      <div class="field">
+        <label>النطاق أو العنوان</label>
+        <input id="osint-target" placeholder="example.com" style="direction:ltr;text-align:left">
+      </div>
+      <div class="field">
+        <label>سجلات DNS</label>
+        <input id="osint-dns" value="A,AAAA,MX,NS,TXT,CNAME" style="direction:ltr;text-align:left">
+      </div>
+      <div class="field">
+        <label>خيارات</label>
+        <label class="check"><input type="checkbox" id="osint-whois"> Whois</label>
+        <label class="check"><input type="checkbox" id="osint-ssl" checked> فحص شهادة TLS</label>
+        <label class="check"><input type="checkbox" id="osint-wk"> robots.txt / security.txt</label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" onclick="runOsint()">جمع المعلومات</button>
+    </div>
+  </div>
+  <div id="osint-out"></div>
+</section>
+
+<!-- ==================== Hash ==================== -->
+<section id="tab-hash">
+  <div class="grid g2">
+    <div class="card">
+      <h2>مولّد الهاشات</h2>
+      <p class="hint">توليد MD5 / SHA-1 / SHA-256 / SHA-512 / SHA3 / CRC32 لنص.</p>
+      <div class="field">
+        <label>النص</label>
+        <input id="gen-text" placeholder="admin123" style="direction:ltr;text-align:left">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" onclick="genHash()">توليد</button>
+      </div>
+      <div id="gen-out" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2>كاشف نوع الهاش</h2>
+      <p class="hint">تحديد النوع المحتمل حسب الطول والصيغة.</p>
+      <div class="field">
+        <label>الهاش</label>
+        <input id="id-hash" placeholder="5f4dcc3b5aa765d61d8327deb882cf99" style="direction:ltr;text-align:left">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" onclick="identifyHash()">كشف</button>
+      </div>
+      <div id="id-out" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>مطابقة الهاش مع قائمة كلمات — Hash Matcher</h2>
+    <p class="hint">مطابقة هاش MD5/SHA-1/SHA-256/... مع قائمة كلمات. ارفع ملف Wordlist أو الصق الكلمات نصاً.</p>
+    <div class="grid g2">
+      <div class="field">
+        <label>الهاش الهدف</label>
+        <input id="m-hash" placeholder="5f4dcc3b5aa765d61d8327deb882cf99" style="direction:ltr;text-align:left">
+      </div>
+      <div class="field">
+        <label>ملف Wordlist (اختياري)</label>
+        <input id="m-file" type="file">
+      </div>
+    </div>
+    <div class="field" style="margin-top:12px">
+      <label>أو الصق الكلمات (كلمة في كل سطر)</label>
+      <textarea id="m-words" rows="8" placeholder="password&#10;admin&#10;123456"></textarea>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" onclick="runHashCrack()">بدء المطابقة</button>
+      <span id="m-count" class="badge">0 كلمة</span>
+    </div>
+    <div id="m-out" style="margin-top:12px"></div>
+  </div>
+</section>
+
+<!-- ==================== Jobs ==================== -->
+<section id="tab-jobs">
+  <div class="card">
+    <div class="flex-between">
+      <div>
+        <h2>المهام الحية</h2>
+        <p class="hint">كل فحص يعمل كمهمة خلفية في المحرك مع تتبع تقدم وإمكانية الإلغاء.</p>
+      </div>
+      <button class="small" onclick="loadJobs()">تحديث</button>
+    </div>
+    <div id="jobsOut" class="empty">لا توجد مهام.</div>
+  </div>
+</section>
+
+<!-- ==================== History ==================== -->
+<section id="tab-history">
+  <div class="card">
+    <div class="flex-between">
+      <div>
+        <h2>سجل الفحوصات</h2>
+        <p class="hint">كل الفحوصات محفوظة في <code>scan_history.json</code> على السيرفر.</p>
+      </div>
+      <div class="row">
+        <button class="small" onclick="loadHistory()">تحديث</button>
+        <button class="small danger" onclick="clearHistory()">تفريغ السجل</button>
+      </div>
+    </div>
+    <div id="historyOut" class="empty">لا توجد سجلات.</div>
+  </div>
+  <div class="card" id="history-detail-card" style="display:none">
+    <h2>تفاصيل الفحص</h2>
+    <div id="history-detail"></div>
+  </div>
+</section>
+
+</main>
+
+<footer>PCT v2.0 — Engine + API Server + Web UI · استخدم الأداة على الأنظمة التي تملك تصريحاً بفحصها فقط.</footer>
+
+<script>
+/* ==========================================================================
+   PCT Web UI — client logic
+   ========================================================================== */
+let TOKEN = localStorage.getItem("pct_token") || "";
+document.getElementById("token").value = TOKEN;
+
+function saveToken(){
+  TOKEN = document.getElementById("token").value.trim();
+  localStorage.setItem("pct_token", TOKEN);
+  toastHealth();
+}
+
+async function api(path, opts={}){
+  const headers = Object.assign({"Content-Type":"application/json"}, opts.headers||{});
+  if (TOKEN) headers["X-API-Token"] = TOKEN;
+  const res = await fetch(path, Object.assign({}, opts, {headers}));
+  let body = null;
+  try { body = await res.json(); } catch(e){ body = {ok:false, error:"استجابة غير صالحة"}; }
+  if (!body.ok) throw new Error(body.error || ("HTTP " + res.status));
+  return body.data;
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------------------------- Tabs ------------------------------------- */
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    $("tab-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "jobs") loadJobs();
+    if (btn.dataset.tab === "history") loadHistory();
+    if (btn.dataset.tab === "dash") loadStats();
+  });
+});
+
+/* --------------------------- Health/Stats ------------------------------ */
+async function toastHealth(){
+  try{
+    const h = await api("/api/health");
+    $("health").className = "badge up";
+    $("health").textContent = "المحرك يعمل · مهام نشطة " + h.active_jobs;
+    $("s-active").textContent = h.active_jobs;
+    $("s-total").textContent = h.history_entries;
+  }catch(e){
+    $("health").className = "badge down";
+    $("health").textContent = "تعذّر الاتصال بالسيرفر";
+  }
+}
+
+async function loadStats(){
+  try{
+    const s = await api("/api/stats");
+    $("s-rules").textContent = s.common_ports ? "" : "";
+    $("s-ports").textContent = s.common_ports.length;
+    $("s-total").textContent = s.total_scans;
+    $("s-active").textContent = s.active_jobs;
+
+    const rules = await api("/api/rules");
+    $("s-rules").textContent = rules.length;
+
+    const bt = s.by_type || {};
+    const keys = Object.keys(bt);
+    $("byType").innerHTML = keys.length
+      ? keys.map(k => `<div class="row" style="justify-content:space-between"><span>${esc(k)}</span><b>${bt[k]}</b></div>`).join("")
+      : "لا توجد بيانات بعد.";
+
+    $("riskyPorts").innerHTML = s.risky_ports.map(p =>
+      `<span class="pill risky">${p} ${esc(s.port_services[p]||"")}</span>`).join("");
+    $("commonPorts").innerHTML = s.common_ports.map(p =>
+      `<span class="pill open">${p} ${esc(s.port_services[p]||"")}</span>`).join("");
+
+    $("rulesBody").innerHTML = rules.map(r => `<tr>
+      <td><span class="sev-${r.severity}">${esc(r.severity)}</span></td>
+      <td>${esc(r.name)}</td><td><code>${esc(r.cwe)}</code></td><td>${esc(r.desc)}</td>
+    </tr>`).join("");
+  }catch(e){ /* السيرفر غير متاح بعد */ }
+}
+
+/* --------------------------- Jobs engine ------------------------------- */
+const watchers = {};
+
+async function submitJob(type, params, onDone){
+  try{
+    const job = await api("/api/jobs", {method:"POST", body: JSON.stringify({type, params})});
+    watchJob(job.id, onDone);
+    return job.id;
+  }catch(e){
+    alert("فشل إنشاء المهمة: " + e.message);
+    return null;
+  }
+}
+
+function watchJob(id, onDone){
+  if (watchers[id]) clearInterval(watchers[id]);
+  watchers[id] = setInterval(async () => {
+    try{
+      const job = await api("/api/jobs/" + id);
+      paintJobBanner(job);
+      if (["done","error","cancelled"].includes(job.status)){
+        clearInterval(watchers[id]); delete watchers[id];
+        $("jobBanner") && $("jobBanner").remove();
+        if (job.status === "done" && onDone) onDone(job.result);
+        else if (job.status === "error") alert("خطأ في المهمة: " + (job.error||""));
+      }
+    }catch(e){ clearInterval(watchers[id]); delete watchers[id]; }
+  }, 900);
+}
+
+function paintJobBanner(job){
+  let el = $("jobBanner");
+  if (!el){
+    el = document.createElement("div");
+    el.id = "jobBanner";
+    el.style.cssText = "position:fixed;bottom:16px;left:16px;right:16px;max-width:620px;margin:auto;z-index:50";
+    el.className = "card";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="flex-between">
+      <b>المهمة ${esc(job.type)} — ${esc(job.target||"")}</b>
+      <span class="st ${job.status}">${job.status} ${job.progress}%</span>
+    </div>
+    <div class="bar" style="margin:10px 0"><i style="width:${job.progress}%"></i></div>
+    <button class="small danger" onclick="cancelJob('${job.id}')">إلغاء</button>`;
+}
+
+async function cancelJob(id){
+  try{ await api("/api/jobs/"+id+"/cancel", {method:"POST"}); }catch(e){}
+}
+
+async function loadJobs(){
+  try{
+    const list = await api("/api/jobs");
+    $("jobsOut").innerHTML = list.length ? list.map(j => `
+      <div class="jobline">
+        <span class="st ${j.status}">${j.status}</span>
+        <b>${esc(j.type)}</b>
+        <span class="mono">${esc(j.target||"")}</span>
+        <div class="grow" style="flex:1">
+          <div class="bar"><i style="width:${j.progress}%"></i></div>
+        </div>
+        <span>${j.progress}%</span>
+        ${["queued","running"].includes(j.status) ? `<button class="small danger" onclick="cancelJob('${j.id}')">إلغاء</button>` : ""}
+      </div>`).join("") : "لا توجد مهام.";
+  }catch(e){ $("jobsOut").innerHTML = `<div class="alert">تعذّر تحميل المهام: ${esc(e.message)}</div>`; }
+}
+
+/* --------------------------- Code Reviewer ----------------------------- */
+let uploadedFiles = [];
+$("code-files").addEventListener("change", async (e) => {
+  uploadedFiles = [];
+  for (const f of e.target.files){
+    if (f.size > 2*1024*1024) continue;
+    uploadedFiles.push({name: f.name, content: await f.text()});
+  }
+  $("code-filecount").textContent = uploadedFiles.length + " ملف مرفوع";
+});
+
+function loadSampleCode(){
+  $("code-text").value = `import os, sqlite3, hashlib, random
+DB_PASSWORD = "SuperSecret123!"
+
+def login(user_id):
+    conn = sqlite3.connect("app.db")
+    cur = conn.cursor()
+    q = "SELECT * FROM users WHERE id = " + user_id
+    cur.execute(q)
+    return cur.fetchone()
+
+def run(host):
+    os.system("ping -c 1 " + host)
+
+def token():
+    return "%08x" % random.randint(0, 0xffffffff)
+
+def read(name):
+    return open("/data/" + name).read()`;
+}
+
+async function runCode(){
+  const code = $("code-text").value;
+  if (!code.trim() && !uploadedFiles.length){ alert("أدخل كوداً أو ارفع ملفات."); return; }
+  $("code-result-card").style.display = "block";
+  $("code-summary").innerHTML = `<span class="badge">جارٍ التحليل...</span>`;
+  $("code-findings").innerHTML = "";
+  await submitJob("code", {
+    code: code, files: uploadedFiles, filename: $("code-name").value || "inline_code"
+  }, renderCode);
+}
+
+function renderCode(r){
+  const s = r.severity_stats || {};
+  $("code-summary").innerHTML = `
+    <span class="badge">ملفات: ${r.files_scanned}</span>
+    <span class="badge">أسطر: ${r.lines}</span>
+    <span class="badge">نتائج: <b>${r.total_findings}</b></span>
+    ${Object.keys(s).filter(k=>s[k]).map(k=>`<span class="pill ${k}">${k}: ${s[k]}</span>`).join("")}
+    <span class="badge">مستوى الخطر: <b class="sev-${r.risk_level}">${r.risk_level}</b></span>`;
+
+  if (!r.findings.length){
+    $("code-findings").innerHTML = `<div class="alert info">لم يتم اكتشاف أي نمط ثغرة معروف. ملاحظة: هذا فحص أنماط (Pattern-based) ولا يغني عن مراجعة بشرية.</div>`;
+    return;
+  }
+  $("code-findings").innerHTML = `<table>
+    <thead><tr><th>#</th><th>الملف</th><th>السطر</th><th>الخطورة</th><th>الثغرة</th><th>CWE</th><th>المقطع</th></tr></thead>
+    <tbody>${r.findings.map((f,i)=>`<tr>
+      <td>${i+1}</td>
+      <td class="mono">${esc(f.file||"")}</td>
+      <td>${f.line}${f.column?":"+f.column:""}</td>
+      <td><span class="sev-${f.severity}">${esc(f.severity)}</span></td>
+      <td>${esc(f.type)}</td>
+      <td><code>${esc(f.cwe)}</code></td>
+      <td><code>${esc(f.snippet)}</code></td>
+    </tr>
+    <tr><td></td><td colspan="6">
+      <div class="hint" style="margin:0">↳ ${esc(f.desc)}</div>
+      <div style="color:var(--green);font-size:12.5px;margin-top:4px">✔ الإصلاح: <code>${esc(f.fix)}</code></div>
+    </td></tr>`).join("")}</tbody></table>`;
+}
+
+/* --------------------------- Network Scanner --------------------------- */
+function parsePorts(txt){
+  const out = [];
+  txt.split(",").map(s=>s.trim()).filter(Boolean).forEach(part => {
+    if (part.includes("-")){
+      const [a,b] = part.split("-").map(Number);
+      if (a && b && a<=b) for (let p=a; p<=b && p<65536; p++) out.push(p);
+    } else {
+      const p = Number(part);
+      if (p>0 && p<65536) out.push(p);
+    }
+  });
+  return out;
+}
+
+async function runNetwork(){
+  const target = $("net-target").value.trim();
+  if (!target){ alert("أدخل هدفاً."); return; }
+  const mode = $("net-mode").value;
+  const params = {
+    target, mode,
+    timeout: parseFloat($("net-timeout").value) || 1.0,
+    threads: parseInt($("net-threads").value) || 200,
+    banner: $("net-banner").checked,
+    ports: mode === "custom" ? parsePorts($("net-ports").value) : []
+  };
+  if (mode === "custom" && !params.ports.length){ alert("أدخل منافذ مخصصة صالحة."); return; }
+  if (mode === "full" && !confirm("الفحص الكامل (65535 منفذ) قد يستغرق دقائق. المتابعة؟")) return;
+  $("net-result-card").style.display = "block";
+  $("net-summary").innerHTML = `<span class="badge">جارٍ الفحص...</span>`;
+  $("net-alerts").innerHTML = ""; $("net-table").innerHTML = "";
+  await submitJob("network", params, renderNetwork);
+}
+
+function renderNetwork(r){
+  $("net-summary").innerHTML = `
+    <span class="badge">الهدف: <b class="mono">${esc(r.target)}</b></span>
+    <span class="badge">IP: <b class="mono">${esc(r.ip)}</b></span>
+    <span class="badge">النمط: ${esc(r.mode)}</span>
+    <span class="badge">منافذ مفحوصة: ${r.ports_scanned}</span>
+    <span class="badge">مفتوحة: <b style="color:var(--green)">${r.open_count}</b></span>
+    <span class="badge">الزمن: ${r.elapsed}s${r.cancelled?" (مُلغى)":""}</span>`;
+
+  $("net-alerts").innerHTML = r.risky_ports.length
+    ? `<div class="alert">منافذ عالية الخطورة مفتوحة: ${r.risky_ports.join(", ")} — راجع ضرورة تعريضها.</div>`
+    : "";
+
+  if (!r.services.length){
+    $("net-table").innerHTML = `<div class="empty">لا توجد منافذ مفتوحة ضمن النطاق المفحوص.</div>`;
+    return;
+  }
+  $("net-table").innerHTML = `<table>
+    <thead><tr><th>المنفذ</th><th>الخدمة</th><th>الحالة</th><th>Banner</th></tr></thead>
+    <tbody>${r.services.map(s=>`<tr>
+      <td><b>${s.port}</b></td>
+      <td class="mono">${esc(s.service)}</td>
+      <td>${s.risky ? '<span class="pill risky">خطير</span>' : '<span class="pill open">مفتوح</span>'}</td>
+      <td class="mono">${esc(s.banner || "—")}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+/* --------------------------- OSINT ------------------------------------- */
+async function runOsint(){
+  const target = $("osint-target").value.trim();
+  if (!target){ alert("أدخل نطاقاً أو عنواناً."); return; }
+  $("osint-out").innerHTML = `<div class="card"><span class="badge">جارٍ جمع المعلومات...</span></div>`;
+  await submitJob("osint", {
+    target,
+    whois: $("osint-whois").checked,
+    ssl: $("osint-ssl").checked,
+    wellknown: $("osint-wk").checked,
+    dns_types: $("osint-dns").value.split(",").map(s=>s.trim().toUpperCase()).filter(Boolean)
+  }, renderOsint);
+}
+
+function renderOsint(r){
+  const sh = r.security_headers;
+  let html = "";
+
+  html += `<div class="card"><h2>البصمة الأساسية</h2>
+    <div class="grid g4">
+      <div class="stat"><b class="mono" style="font-size:18px">${esc(r.ip||"—")}</b><span>IP</span></div>
+      <div class="stat"><b class="mono" style="font-size:18px">${esc(r.reverse_dns||"—")}</b><span>Reverse DNS</span></div>
+      <div class="stat"><b style="font-size:18px">${r.http_status ?? "—"}</b><span>HTTP Status</span></div>
+      <div class="stat"><b style="font-size:18px">${r.header_count||0}</b><span>عدد الترويسات</span></div>
+    </div>
+    ${r.resolve_error ? `<div class="alert" style="margin-top:12px">فشل حل العنوان: ${esc(r.resolve_error)}</div>` : ""}
+    ${(r.alerts||[]).map(a=>`<div class="alert">${esc(a)}</div>`).join("")}
+  </div>`;
+
+  if (sh){
+    html += `<div class="grid g2">
+      <div class="card"><h2>تدقيق الترويسات الأمنية</h2>
+        <p class="hint">التقييم: ${sh.score}% (${sh.present.length}/${sh.present.length+sh.missing.length})</p>
+        <div class="row" style="align-items:center;gap:18px">
+          <div class="grade ${sh.grade}">${sh.grade}</div>
+          <div style="flex:1">
+            ${sh.present.map(p=>`<span class="pill open">✔ ${esc(p.header)}</span>`).join("")}
+            ${sh.missing.map(p=>`<span class="pill risky">✘ ${esc(p.header)}</span>`).join("")}
+          </div>
+        </div>
+        <div class="divider"></div>
+        ${sh.missing.map(m=>`<div class="hint" style="margin:4px 0">• <b>${esc(m.header)}</b> مفقود: ${esc(m.why)}</div>`).join("") || '<div class="empty">كل الترويسات الأمنية موجودة.</div>'}
+      </div>
+      <div class="card"><h2>شهادة TLS / SSL</h2>
+        ${r.ssl && r.ssl.enabled ? `
+          <div class="hint">المُصدِر: <b>${esc(r.ssl.issuer||"—")}</b></div>
+          <div class="hint">الاسم: <code>${esc(r.ssl.subject||"—")}</code></div>
+          <div class="hint">الإصدار: ${esc(r.ssl.tls_version||"")} · Cipher: <code>${esc(r.ssl.cipher||"")}</code></div>
+          <div class="hint">صلاحية: ${esc(r.ssl.not_before||"")} → ${esc(r.ssl.not_after||"")}</div>
+          <div class="hint">الأيام المتبقية: <b style="color:${(r.ssl.days_left??999)<15?'var(--red)':'var(--green)'}">${r.ssl.days_left ?? "—"}</b></div>
+          ${(r.ssl.san||[]).length?`<div class="hint">SAN: <code>${r.ssl.san.map(esc).join(", ")}</code></div>`:""}
+        ` : `<div class="empty">${esc((r.ssl&&r.ssl.error)||"لم يتم فحص الشهادة.")}</div>`}
+      </div>
+    </div>`;
+  }
+
+  const dns = r.dns || {};
+  const dnsRows = Object.keys(dns).flatMap(t => (dns[t]||[]).map(rec =>
+    `<tr><td><span class="pill">${esc(t)}</span></td><td class="mono">${esc(rec.value ?? rec.error ?? "")}</td></tr>`));
+  html += `<div class="card"><h2>سجلات DNS</h2>
+    ${dnsRows.length ? `<table><thead><tr><th>النوع</th><th>القيمة</th></tr></thead><tbody>${dnsRows.join("")}</tbody></table>`
+      : `<div class="empty">لا توجد سجلات (قد يكون DNS محجوباً من الشبكة الحالية).</div>`}
+  </div>`;
+
+  if (r.headers && Object.keys(r.headers).length){
+    html += `<div class="card"><h2>ترويسات HTTP</h2>
+      <pre>${esc(Object.entries(r.headers).map(([k,v])=>k+": "+v).join("\n"))}</pre></div>`;
+  }
+
+  if (r.wellknown){
+    html += `<div class="card"><h2>robots.txt / security.txt</h2>
+      ${Object.entries(r.wellknown).map(([p,v])=>`<div class="hint"><b>${esc(p)}</b> — الحالة: ${esc(v.status ?? "خطأ")}</div>
+        ${v.preview?`<pre>${esc(v.preview)}</pre>`:""}${v.error?`<div class="alert">${esc(v.error)}</div>`:""}`).join("")}
+    </div>`;
+  }
+
+  if (r.whois_preview){
+    html += `<div class="card"><h2>Whois (مقتطف)</h2><pre>${esc(r.whois_preview)}</pre></div>`;
+  }
+
+  $("osint-out").innerHTML = html;
+}
+
+/* --------------------------- Hash -------------------------------------- */
+async function genHash(){
+  const text = $("gen-text").value;
+  if (!text){ alert("أدخل نصاً."); return; }
+  try{
+    const d = await api("/api/hash/generate", {method:"POST", body: JSON.stringify({text})});
+    $("gen-out").innerHTML = `<table><tbody>${Object.entries(d.hashes).map(([k,v])=>
+      `<tr><td>${esc(k.toUpperCase())}</td><td class="mono">${esc(v)}</td></tr>`).join("")}</tbody></table>`;
+  }catch(e){ $("gen-out").innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+
+async function identifyHash(){
+  const h = $("id-hash").value.trim();
+  if (!h){ alert("أدخل هاشاً."); return; }
+  try{
+    const d = await api("/api/hash/identify", {method:"POST", body: JSON.stringify({hash:h})});
+    $("id-out").innerHTML = d.valid
+      ? `<div class="alert info">النوع المرجّح: <b>${esc(d.primary)}</b> · الطول ${d.length}
+         <br>مرشحون: ${d.candidates.map(c=>`<span class="pill">${esc(c)}</span>`).join("")}
+         <br>خوارزميات المطابقة: ${d.algos.map(a=>`<span class="pill">${esc(a)}</span>`).join("")}</div>`
+      : `<div class="alert">غير صالح: ${esc(d.reason||"")}</div>`;
+  }catch(e){ $("id-out").innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+
+$("m-words").addEventListener("input", () => {
+  const n = $("m-words").value.split("\n").filter(l=>l.trim()).length;
+  $("m-count").textContent = n + " كلمة";
+});
+
+async function runHashCrack(){
+  const hash = $("m-hash").value.trim();
+  if (!hash){ alert("أدخل الهاش."); return; }
+  const file = $("m-file").files[0];
+  const words = $("m-words").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if (!file && !words.length){ alert("ارفع Wordlist أو الصق كلمات."); return; }
+  $("m-out").innerHTML = `<span class="badge">جارٍ المطابقة...</span>`;
+
+  if (file){
+    // رفع الملف كقائمة كلمات عبر تحميل محتواه وإرسال الكلمات (حد 1MB)
+    if (file.size > 1024*1024*8){ alert("الملف كبير جداً للرفع؛ استخدم ملفاً أصغر (<8MB)."); return; }
+    const txt = await file.text();
+    const fileWords = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    $("m-count").textContent = fileWords.length + " كلمة";
+    await submitJob("hash", {hash, words: fileWords, max_seconds: 180}, renderHash);
+  } else {
+    await submitJob("hash", {hash, words, max_seconds: 120}, renderHash);
+  }
+}
+
+function renderHash(d){
+  $("m-out").innerHTML = `
+    <div class="grid g3">
+      <div class="stat"><b class="mono" style="font-size:16px">${esc(d.hash_type)}</b><span>نوع الهاش</span></div>
+      <div class="stat"><b>${d.words_tried}</b><span>كلمة مُجرَّبة</span></div>
+      <div class="stat"><b>${d.elapsed}s</b><span>الزمن</span></div>
+    </div>
+    ${d.found
+      ? `<div class="alert info" style="margin-top:12px">تم إيجاد تطابق: <b class="mono" style="color:var(--green)">${esc(d.match.word)}</b> (خوارزمية: ${esc(d.match.algo)})</div>`
+      : `<div class="alert" style="margin-top:12px">لا يوجد تطابق${d.timed_out?" (انتهت المهلة الزمنية)":""}. جرّب قائمة كلمات أكبر.</div>`}`;
+}
+
+/* --------------------------- History ----------------------------------- */
+async function loadHistory(){
+  try{
+    const list = await api("/api/history?limit=100");
+    $("historyOut").innerHTML = list.length ? list.map(e => `
+      <div class="jobline">
+        <span class="st done">#${e.id}</span>
+        <b>${esc(e.type)}</b>
+        <span class="mono">${esc(e.target)}</span>
+        <span class="grow" style="flex:1;color:var(--muted);font-size:12.5px">${esc(e.summary)}</span>
+        <span class="badge">${esc(e.timestamp)}</span>
+        <button class="small" onclick="showHistory(${e.id})">تفاصيل</button>
+      </div>`).join("") : "لا توجد سجلات.";
+  }catch(e){ $("historyOut").innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+
+async function showHistory(id){
+  try{
+    const e = await api("/api/history/" + id);
+    $("history-detail-card").style.display = "block";
+    $("history-detail").innerHTML = `
+      <div class="row" style="margin-bottom:10px">
+        <span class="badge">#${e.id}</span><span class="badge">${esc(e.type)}</span>
+        <span class="badge">${esc(e.timestamp)}</span>
+        <span class="badge mono">${esc(e.target)}</span>
+      </div>
+      <div class="hint">${esc(e.summary)}</div>
+      <pre>${esc(JSON.stringify(e.details, null, 2)).slice(0, 12000)}</pre>`;
+  }catch(e){ alert("فشل التحميل: " + e.message); }
+}
+
+async function clearHistory(){
+  if (!confirm("تفريغ كل سجل الفحوصات؟")) return;
+  try{ await api("/api/history", {method:"DELETE"}); loadHistory(); loadStats(); }
+  catch(e){ alert("فشل التفريغ: " + e.message); }
+}
+
+/* --------------------------- Boot -------------------------------------- */
+toastHealth();
+loadStats();
+loadHistory();
+setInterval(toastHealth, 15000);
+</script>
+</body>
+</html>

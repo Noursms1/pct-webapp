@@ -1,0 +1,54 @@
+name: PCT Engine Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run engine unit tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify dnspython is installed
+        run: |
+          python -c "import dns.resolver; print('dnspython OK:', dns.resolver.__file__)"
+
+      - name: Compile all Python sources
+        run: |
+          python -m compileall -q engine tests server.py selftest.py
+
+      - name: Run engine self-test
+        run: python selftest.py
+
+      - name: Run OSINT self-test
+        run: python -m engine.osint_dns
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Run unit tests directly
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        run: python tests/test_osint_dns.py

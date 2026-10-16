@@ -122,6 +122,7 @@
   <button data-tab="osint">OSINT / DNS</button>
   <button data-tab="hash">الهاشات</button>
   <button data-tab="deps">المكتبات</button>
+  <button data-tab="subdomains">النطاقات الفرعية</button>
   <button data-tab="jobs">المهام الحية</button>
   <button data-tab="history">سجل الفحوصات</button>
 </nav>
@@ -864,6 +865,42 @@ function renderDeps(r){
   if (!r.tool_available){ $("deps-vulns").innerHTML = `<div class="alert">⚠️ <b>pip-audit غير مثبّت</b> — تم تحليل الملف فقط بدون فحص CVEs.<br>لتشغيل الفحص الكامل: <code>pip install pip-audit</code></div>`; return; }
   if (!vulns){ $("deps-vulns").innerHTML = `<div class="alert info">✅ لا توجد ثغرات معروفة في الحزم المفحوصة.</div>`; return; }
   $("deps-vulns").innerHTML = `<table style="table-layout:fixed;width:100%"><thead><tr><th style="width:40px">#</th><th style="width:110px">الحزمة</th><th style="width:90px">الإصدار</th><th style="width:260px">المعرف</th><th>إصدارات الإصلاح</th></tr></thead><tbody>${(r.vulnerabilities || []).map((v,i) => `<tr><td>${i+1}</td><td><b>${esc(v.package)}</b></td><td class="mono">${esc(v.version)}</td><td style="padding:8px"><div class="mono" style="font-weight:600">${esc(v.id)}</div>${v.aliases && v.aliases.length ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${v.aliases.map(esc).join(" · ")}</div>` : ""}</td><td class="mono" style="word-break:break-all">${(v.fix_versions || []).map(esc).join(" · ") || "—"}</td></tr>`).join("")}</tbody></table>`;
+}
+
+/* --------------------------- Subdomains -------------------------------- */
+let _sdLastResult = null;
+async function runSubdomains(){
+  const domain = $("sd-domain").value.trim();
+  if (!domain){ alert("أدخل نطاقًا."); return; }
+  const sources = $("sd-sources").value.split(",").map(s => s.trim()).filter(Boolean);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 240000);
+  $("sd-result-card").style.display = "block";
+  $("sd-summary").innerHTML = `<span class="badge">جارٍ الكشف... (30-90 ثانية)</span>`;
+  $("sd-table").innerHTML = "";
+  try{
+    const headers = {"Content-Type":"application/json"};
+    if (TOKEN) headers["X-API-Token"] = TOKEN;
+    const response = await fetch("/api/subdomains/enum", {method:"POST", headers, body:JSON.stringify({domain, sources, probe_http:$("sd-probe").checked}), signal:controller.signal});
+    clearTimeout(timer);
+    const body = await response.json();
+    if (!body.ok) throw new Error(body.error || ("HTTP " + response.status));
+    _sdLastResult = body.data; renderSubdomains(body.data);
+  }catch(error){ clearTimeout(timer); const message = error.name === "AbortError" ? "انتهت المهلة (240 ثانية)." : error.message; $("sd-summary").innerHTML = `<div class="alert">فشل: ${esc(message)}</div>`; }
+}
+function renderSubdomains(result){
+  const sources = Object.entries(result.sources || {}).map(([name, info]) => `<span class="badge">${esc(name)}: <b>${info.found}</b>${info.error ? " ⚠️" : ""}</span>`).join("");
+  $("sd-summary").innerHTML = `<span class="badge">النطاق: <b class="mono">${esc(result.domain)}</b></span><span class="badge">عدد: <b style="color:var(--cyan)">${result.count}</b></span>${sources}`;
+  if (!result.subdomains.length){ $("sd-table").innerHTML = `<div class="alert">لا توجد نطاقات فرعية مكتشفة.</div>`; return; }
+  const probes = {}; (result.probes || []).forEach(item => { probes[item.host] = item; });
+  const status = code => code == null ? `<span class="sev-low">—</span>` : `<span class="${code < 400 ? "sev-low" : code < 500 ? "sev-medium" : "sev-high"}">${code}</span>`;
+  $("sd-table").innerHTML = `<table style="table-layout:fixed;width:100%"><thead><tr><th style="width:40px">#</th><th>النطاق الفرعي</th>${result.probe_enabled ? "<th style=\"width:70px\">HTTPS</th><th style=\"width:70px\">HTTP</th><th style=\"width:140px\">Server</th><th>Title</th>" : ""}</tr></thead><tbody>${result.subdomains.map((host, index) => { const probe = probes[host] || {}; return `<tr><td>${index + 1}</td><td class="mono">${esc(host)}</td>${result.probe_enabled ? `<td>${status(probe.https_status)}</td><td>${status(probe.http_status)}</td><td class="mono">${esc(probe.server || "—")}</td><td>${esc(probe.title || "—")}</td>` : ""}</tr>`; }).join("")}</tbody></table>`;
+}
+function exportSubdomains(format){
+  if (!_sdLastResult){ alert("لا توجد نتائج."); return; }
+  const result = _sdLastResult; const isJson = format === "json";
+  const content = isJson ? JSON.stringify(result, null, 2) : ["index,subdomain"].concat(result.subdomains.map((host, index) => `${index + 1},${host}`)).join("\n");
+  const blob = new Blob([content], {type:isJson ? "application/json" : "text/csv"}); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `subdomains_${result.domain}.${isJson ? "json" : "csv"}`; link.click(); URL.revokeObjectURL(url);
 }
 
 /* --------------------------- History ----------------------------------- */

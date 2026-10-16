@@ -50,6 +50,7 @@ from engine.core import Progress
 from engine import code_reviewer, network_scanner, hash_matcher
 from engine import osint_dns
 from engine import dependency_scanner
+from engine import subdomain_enum
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -97,12 +98,17 @@ def run_dependencies(job, params):
     return dependency_scanner.scan_dependencies(job, _prepare(params, job))
 
 
+def run_subdomains(job, params):
+    return subdomain_enum.enumerate_subdomains(job, _prepare(params, job))
+
+
 JOB_RUNNERS = {
     "code": (run_code, lambda p: (p.get("filename") or "inline_code")),
     "network": (run_network, lambda p: p.get("target", "")),
     "osint": (run_osint, lambda p: p.get("target", "")),
     "hash": (run_hash, lambda p: (p.get("hash", "")[:16] + "...")),
     "deps": (run_dependencies, lambda p: p.get("path") or ((p.get("files") or [{}])[0].get("name", "inline"))),
+    "subdomains": (run_subdomains, lambda p: p.get("domain", "")),
 }
 
 
@@ -312,6 +318,26 @@ def deps_scan_sync():
         return fail(exc)
     return ok(result)
 
+
+
+@app.route("/api/subdomains/enum", methods=["POST"])
+@require_token
+def subdomains_enum_sync():
+    body = request.get_json(silent=True) or {}
+    domain = (body.get("domain") or "").strip()
+    if not domain:
+        return fail("domain مطلوب")
+    try:
+        result = subdomain_enum.enumerate_subdomains(None, {
+            "domain": domain,
+            "sources": body.get("sources"),
+            "probe_http": bool(body.get("probe_http", False)),
+            "timeout": int(body.get("timeout", 15)),
+            "probe_timeout": int(body.get("probe_timeout", 5)),
+        })
+    except Exception as exc:
+        return fail(exc)
+    return ok(result)
 
 
 @app.errorhandler(404)

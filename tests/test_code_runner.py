@@ -1,3 +1,23 @@
+import shutil
+import unittest
+
+
+def _docker_available() -> bool:
+    """Return True only if the Docker daemon is actually reachable."""
+    if shutil.which("docker") is None:
+        return False
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 # -*- coding: utf-8 -*-
 import os, sys, subprocess, unittest
 from unittest import mock
@@ -5,6 +25,8 @@ ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path: sys.path.insert(0, ROOT)
 from engine import code_runner as cr
 
+
+@unittest.skipUnless(_docker_available(), 'Docker not available')
 class TestRunner(unittest.TestCase):
     def test_config_and_validation(self):
         self.assertIn('python',cr.LANGUAGES)

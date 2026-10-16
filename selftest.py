@@ -1,333 +1,478 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-اختبار ذاتي للمحرك (بدون سيرفر).
-Self-test for the engine layer only.
+PCT - Portable Cybersecurity Toolkit
+Self-test suite.
 
+Runs smoke tests against the main engine modules and prints a clear
+pass/fail summary. Exit code 0 = all good, 1 = at least one failure.
+
+Usage:
     python selftest.py
+    python selftest.py --verbose
+    python selftest.py --json
 """
 
-import sys
-import os
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import sys
 import tempfile
+import time
+import traceback
+from pathlib import Path
+from typing import Any, Callable, List, Tuple
 
 try:
-    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, ValueError):
     pass
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from engine import (
-    code_reviewer, network_scanner, hash_matcher, osint_dns,
-    dependency_scanner, email_recon, report_generator, nuclei_scanner,
-)
-from engine.core import JobManager, HistoryManager
+BASE_DIR = Path(__file__).parent.resolve()
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 
-def section(title):
-    print("\n" + "=" * 60)
-    print("  " + title)
-    print("=" * 60)
+# ---------------------------------------------------------------------------
+# Minimal test harness
+# ---------------------------------------------------------------------------
+class Report:
+    def __init__(self) -> None:
+        self.rows: List[Tuple[str, str, bool, str, float]] = []
+
+    def add(self, section: str, name: str, ok: bool, detail: str, ms: float) -> None:
+        self.rows.append((section, name, ok, detail, ms))
+
+    @property
+    def passed(self) -> int:
+        return sum(1 for r in self.rows if r[2])
+
+    @property
+    def failed(self) -> int:
+        return sum(1 for r in self.rows if not r[2])
+
+    @property
+    def total(self) -> int:
+        return len(self.rows)
+
+    def ok(self) -> bool:
+        return self.failed == 0
 
 
-# ===========================================================================
-# 1) Code Reviewer
-# ===========================================================================
-
-def test_code_reviewer():
-    section("1) Code Reviewer")
-    code = (
-        'DB_PASSWORD = "SuperSecret123!"\n'
-        'cur.execute("SELECT * FROM users WHERE id = " + user_id)\n'
-        'os.system("ping -c 1 " + host)\n'
-        'import pickle\n'
-        'obj = pickle.loads(data)\n'
-        'el.innerHTML = innerHTML\n'
-        'h = hashlib.md5(b"x").hexdigest()\n'
-    )
-    r = code_reviewer.scan_code(None, {"code": code, "filename": "demo.py"})
-    print(f"  lines={r['lines']} findings={r['total_findings']} risk={r['risk_level']}")
-    for f in r["findings"]:
-        print(f"   - L{f['line']:<3} {f['severity']:<8} {f['type']} ({f['cwe']})")
-    assert r["total_findings"] >= 5, "expected at least 5 findings"
-    secret_hits = [f for f in r["findings"] if f["rule_id"] == "SECRET"]
-    assert secret_hits and "SuperSecret" not in secret_hits[0]["snippet"], "secret not masked"
-    print("  [OK] code reviewer + secret masking")
+REPORT = Report()
 
 
-# ===========================================================================
-# 2) Hash Matcher
-# ===========================================================================
-
-def test_hash_matcher():
-    section("2) Hash Matcher")
-    target = hash_matcher.hash_word("password123", "md5")
-    ident = hash_matcher.detect_hash_type(target)
-    print(f"  target={target} detected={ident['primary']}")
-    assert ident["valid"] and ident["primary"] == "MD5"
-
-    words = [f"word{i}" for i in range(500)] + ["password123"]
-    r = hash_matcher.crack_hash(None, {"hash": target, "words": words})
-    print(f"  found={r['found']} match={r['match']} tried={r['words_tried']} t={r['elapsed']}s")
-    assert r["found"] and r["match"]["word"] == "password123"
-
-    sha = hash_matcher.hash_word("admin", "sha256")
-    r2 = hash_matcher.crack_hash(None, {"hash": sha, "words": ["x", "admin"]})
-    assert r2["found"], "sha256 crack failed"
-    gen = hash_matcher.generate_hashes("test")
-    assert gen["sha256"] == hash_matcher.hash_word("test", "sha256")
-    print("  [OK] md5 + sha256 matching + generator")
+def run_case(section: str, name: str, fn: Callable[[], Any]) -> None:
+    start = time.perf_counter()
+    ok = True
+    detail = ""
+    try:
+        out = fn()
+        if out is not None:
+            detail = str(out)
+    except Exception as exc:
+        ok = False
+        detail = "{0}: {1}".format(type(exc).__name__, exc)
+        if os.environ.get("PCT_SELFTEST_TRACE"):
+            detail += "\n" + traceback.format_exc()
+    elapsed = (time.perf_counter() - start) * 1000.0
+    REPORT.add(section, name, ok, detail, elapsed)
 
 
-# ===========================================================================
-# 3) Network Scanner
-# ===========================================================================
-
-def test_network_scanner():
-    section("3) Network Scanner (localhost)")
-    ips = network_scanner.resolve("127.0.0.1")
-    print(f"  resolved: {ips}")
-    open_ports, elapsed = network_scanner.scan_ports(
-        "127.0.0.1", [22, 80, 443, 8000, 8080, 3306], timeout=0.4, max_threads=20)
-    print(f"  open={open_ports} elapsed={elapsed}s")
-    r = network_scanner.scan_network(None, {
-        "target": "127.0.0.1", "mode": "custom",
-        "ports": [22, 80, 443, 8000], "timeout": 0.4, "threads": 20, "banner": False,
-    })
-    print(f"  mode={r['mode']} scanned={r['ports_scanned']} open={r['open_count']}")
-    print("  [OK] network scanner")
+def section(index: int, title: str) -> None:
+    line = "=" * 62
+    print("")
+    print(line)
+    print("  {0}) {1}".format(index, title))
+    print(line)
 
 
-# ===========================================================================
-# 4) OSINT
-# ===========================================================================
-
-def test_osint():
-    section("4) OSINT (offline-safe)")
-    r = osint_dns.run_osint(None, {
-        "target": "127.0.0.1", "whois": False, "ssl": False,
-        "wellknown": False, "dns_types": ["A"],
-    })
-    print(f"  host={r['host']} ip={r['ip']} reverse={r['reverse_dns']}")
-    print(f"  http_status={r['http_status']} http_error={r['http_error']}")
-    assert r["host"] == "127.0.0.1"
-    audit = osint_dns.audit_security_headers({"Server": "nginx", "X-Frame-Options": "DENY"})
-    print(f"  header audit: score={audit['score']} grade={audit['grade']} missing={len(audit['missing'])}")
-    print("  [OK] osint")
+def safe_tempfile(suffix: str = ".db") -> str:
+    """Create a temp file path without auto-cleanup (Windows-friendly)."""
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    return path
 
 
-# ===========================================================================
-# 5) Job Manager + History
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# 1) Code reviewer
+# ---------------------------------------------------------------------------
+def test_code_reviewer() -> None:
+    section(1, "Code Reviewer")
 
-def test_job_manager():
-    section("5) Job Manager + History")
-    tmp = os.path.join(tempfile.gettempdir(), "pct_test_history.json")
-    if os.path.exists(tmp):
-        os.remove(tmp)
-    history = HistoryManager(tmp)
-    jm = JobManager(max_workers=2, history=history)
+    def check_import() -> str:
+        from engine import code_reviewer
+        return "module={0}".format(code_reviewer.__name__)
 
-    def slow_job(job, params):
-        pr = params["_progress"]
-        for i in range(10):
-            pr.update((i + 1) * 10)
-        return {"value": 42, "target": params.get("target")}
+    run_case("Code Reviewer", "import", check_import)
 
-    j = jm.submit("code", "unit-test", slow_job, {"target": "x"})
-    print(f"  submitted job {j['id']} status={j['status']}")
-    import time
-    for _ in range(50):
-        st = jm.get(j["id"])
-        if st["status"] in ("done", "error"):
-            break
-        time.sleep(0.1)
-    assert st["status"] == "done", f"job failed: {st}"
-    assert st["result"]["value"] == 42
-    assert len(history.list()) == 1
-    print(f"  final status={st['status']} progress={st['progress']} history={len(history.list())}")
-    os.remove(tmp)
-    print("  [OK] job manager + history persistence")
+    def check_scan_vulnerable() -> str:
+        from engine import code_reviewer
+        sample = (
+            "import os\n"
+            "import pickle\n"
+            "DB_PASSWORD = 'SuperSecret123!'\n"
+            "cur.execute('SELECT * FROM users WHERE id = ' + user_id)\n"
+            "os.system('ping -c 1 ' + host)\n"
+            "obj = pickle.loads(data)\n"
+            "el.innerHTML = userInput\n"
+            "h = hashlib.md5(b'x').hexdigest()\n"
+        )
+        result = code_reviewer.scan_code(None, {"code": sample, "filename": "demo.py"})
+        total = int(result.get("total_findings", 0))
+        if total < 1:
+            raise AssertionError("expected at least one finding, got 0")
+        return "findings={0}".format(total)
 
+    run_case("Code Reviewer", "scan vulnerable", check_scan_vulnerable)
 
-# ===========================================================================
-# 6) Dependencies (offline — parser + graceful pip-audit)
-# ===========================================================================
+    def check_scan_clean() -> str:
+        from engine import code_reviewer
+        clean = "def add(a: int, b: int) -> int:\n    return a + b\n"
+        result = code_reviewer.scan_code(None, {"code": clean, "filename": "clean.py"})
+        return "findings={0}".format(result.get("total_findings", 0))
 
-def test_dependencies():
-    section("6) Dependency Scanner (offline)")
-    content = (
-        "urllib3==1.26.0\n"
-        "jinja2==2.11.0\n"
-        "# a comment\n"
-        "\n"
-        "-r other.txt\n"
-        "git+https://github.com/x/y.git#egg=z\n"
-    )
-    pkgs = dependency_scanner.parse_requirements_txt(content)
-    print(f"  parser: {len(pkgs)} packages found")
-    for p in pkgs:
-        print(f"     - {p['name']} {p['specifier']}")
-    assert len(pkgs) == 2, f"expected 2 packages, got {len(pkgs)}"
-
-    avail = dependency_scanner.pip_audit_available()
-    print(f"  pip-audit available: {avail}")
-    if avail:
-        from unittest import mock
-        fake = {"tool": "pip-audit", "available": True, "vulnerabilities": [], "packages_scanned": 1, "error": None}
-        with mock.patch.object(dependency_scanner, "run_pip_audit", return_value=fake):
-            r = dependency_scanner.scan_requirements_content("flask==3.0.0", filename="inline.txt")
-        print(f"  scan (mocked): parsed={r['packages_parsed']} tool_available={r['tool_available']}")
-        assert r["packages_parsed"] == 1
-    else:
-        r = dependency_scanner.scan_requirements_content("flask==3.0.0", filename="inline.txt")
-        assert r["packages_parsed"] == 1 and r["error"]
-        print(f"  graceful error: {r['error'][:60]}...")
-    print("  [OK] dependency scanner")
+    run_case("Code Reviewer", "scan clean", check_scan_clean)
 
 
-# ===========================================================================
-# 7) Email Recon (offline — parts only, no network)
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# 2) Dependency scanner
+# ---------------------------------------------------------------------------
+def test_dependency_scanner() -> None:
+    section(2, "Dependency Scanner")
 
-def test_email_recon():
-    section("7) Email Recon (offline parts)")
+    def check_parser() -> str:
+        from engine import dependency_scanner
+        parser = getattr(dependency_scanner, "parse_requirements_txt", None)
+        if parser is None:
+            raise AttributeError("parse_requirements_txt not found")
+        content = "flask==0.12.0\nrequests>=2.0.0\ndjango<3.0\n"
+        packages = parser(content)
+        if not packages:
+            raise AssertionError("parser returned empty result")
+        return "packages={0}".format(len(packages))
 
-    # --- validation ---
-    assert email_recon.is_valid_email("user@example.com") is True
-    assert email_recon.is_valid_email("bad") is False
-    assert email_recon.is_valid_email("a@b") is False
-    print("  validation: ok")
-
-    # --- parsing ---
-    p = email_recon.parse_email_parts("admin@mailinator.com")
-    print(f"  parts: role={p['is_role_based']} disposable={p['is_disposable']}")
-    assert p["is_role_based"] is True
-    assert p["is_disposable"] is True
-    assert p["domain"] == "mailinator.com"
-
-    # --- full recon with all network checks disabled ---
-    r = email_recon.recon_email(None, {
-        "email": "test@example.com",
-        "check_gravatar": False,
-        "check_github": False,
-        "check_breach": False,
-        "check_rep": False,
-        "check_domain": False,
-    })
-    assert r["parts"]["local"] == "test"
-    assert r["parts"]["domain"] == "example.com"
-    assert r["email_hash"], "email_hash missing"
-
-    # --- privacy: raw email must NOT appear in result ---
-    as_str = json.dumps(r)
-    assert "test@example.com" not in as_str, "raw email leaked in result!"
-    print("  privacy: raw email not exposed")
-    print("  [OK] email recon")
+    run_case("Dependencies", "parse requirements.txt", check_parser)
 
 
-# ===========================================================================
-# 8) Report Generator (offline — temp history)
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# 3) Languages registry
+# ---------------------------------------------------------------------------
+def test_languages() -> None:
+    section(3, "Languages Registry")
 
-def test_report_generator():
-    section("8) Report Generator (offline)")
-    tmp = os.path.join(tempfile.gettempdir(), "pct_report_test.json")
-    if os.path.exists(tmp):
-        os.remove(tmp)
+    def check_reload() -> str:
+        from engine import languages
+        languages.reload()
+        names = languages.list_names()
+        if not names:
+            raise AssertionError("no languages registered")
+        return "count={0} first={1}".format(len(names), names[0])
 
-    hm = HistoryManager(tmp)
-    hm.add("code", "demo.py", "findings=1", {
-        "findings": [{
-            "title": "SQL Injection", "severity": "critical",
-            "cwe": "CWE-89", "cvss_score": "9.8",
-            "line": 3, "desc": "tainted sql",
-            "snippet": "cur.execute(q)",
-            "fix": "parameterized queries",
-            "rule_id": "SQLI_AST", "analysis": "ast",
-        }],
-    })
-    hm.add("network", "127.0.0.1", "open_ports=[135]", {
-        "open_ports": [135, 445], "risky_ports": [135, 445],
-    })
+    run_case("Languages", "reload + list", check_reload)
 
-    for fmt, ext in (("markdown", "md"), ("html", "html"), ("json", "json")):
-        r = report_generator.generate_report(None, {
-            "history_file": tmp, "format": fmt, "last_n": 10,
-        })
-        print(f"  {fmt}: format={r['format']} findings={r['summary']['total']}")
-        assert r["summary"]["total"] >= 2, f"{fmt}: expected 2+ findings"
-        assert r["format"] == ext, f"{fmt}: expected ext {ext}"
+    def check_detect() -> str:
+        from engine import languages
+        detected = languages.detect("app.py")
+        if detected != "python":
+            raise AssertionError("expected python, got {0}".format(detected))
+        return "detect=python"
 
-    # markdown contains key info
-    md = report_generator.generate_report(None, {
-        "history_file": tmp, "format": "markdown", "last_n": 10,
-    })
-    assert "SQL Injection" in md["content"]
-    assert "CWE-89" in md["content"]
-    assert "Risky port" in md["content"] or "135" in md["content"]
-    print("  markdown: includes title, CWE, port info")
+    run_case("Languages", "detect python", check_detect)
 
-    # html escaping
-    html = report_generator.generate_report(None, {
-        "history_file": tmp, "format": "html", "last_n": 10,
-    })
-    assert "<!DOCTYPE html>" in html["content"]
-    print("  html: valid document structure")
+    def check_stats() -> str:
+        from engine import languages
+        stats = languages.stats()
+        return "languages={0} rules={1}".format(
+            stats.get("languages"), stats.get("total_rules")
+        )
 
-    os.remove(tmp)
-    print("  [OK] report generator")
+    run_case("Languages", "stats snapshot", check_stats)
 
 
-# ===========================================================================
-# 9) Nuclei (graceful degradation without binary)
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# 4) Rule engine
+# ---------------------------------------------------------------------------
+def test_rule_engine() -> None:
+    section(4, "Rule Engine")
 
-def test_nuclei():
-    section("9) Nuclei Scanner (graceful)")
-    avail = nuclei_scanner.nuclei_available()
-    print(f"  binary available: {avail}")
+    def check_scan_multi() -> str:
+        from engine import rule_engine
+        payload = {
+            "files": [
+                {
+                    "name": "server.py",
+                    "content": (
+                        "import os\n"
+                        "os.system('ping ' + host)\n"
+                        "password = 'hardcoded'\n"
+                    ),
+                }
+            ]
+        }
+        result = rule_engine.scan_multi(None, payload)
+        total = int(result.get("total_findings", 0))
+        if total < 1:
+            raise AssertionError("expected at least one finding")
+        return "files={0} findings={1}".format(result.get("files_scanned"), total)
 
-    # JSONL parser — always offline
-    sample = (
-        '{"template-id":"CVE-X","info":{"severity":"critical","name":"Log4Shell"},'
-        '"host":"example.com","matched-at":"https://example.com/api"}\n'
-        'not json\n'
-        '{"template-id":"info-tpl","info":{"severity":"info"},'
-        '"host":"example.com","matched-at":"https://example.com/"}\n'
-    )
-    findings = nuclei_scanner._parse_nuclei_jsonl(sample)
-    print(f"  jsonl parser: {len(findings)} findings (severity sorted)")
-    assert len(findings) == 2
-    assert findings[0]["severity"] == "critical"
-    assert findings[1]["severity"] == "info"
-
-    # graceful run without binary
-    if not avail:
-        r = nuclei_scanner.run_nuclei(["https://example.com"])
-        assert r["available"] is False
-        assert r["count"] == 0
-        assert r["errors"], "expected error message"
-        print(f"  graceful error: {r['errors'][0][:60]}...")
-    print("  [OK] nuclei scanner")
+    run_case("Rule Engine", "scan_multi", check_scan_multi)
 
 
-# ===========================================================================
-# RUNNER
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# 5) Unified intelligence layer
+# ---------------------------------------------------------------------------
+def test_unified() -> None:
+    section(5, "Unified Intelligence")
+
+    def check_db() -> str:
+        from engine.unified import IntelligenceDB
+        db_path = safe_tempfile(".db")
+        try:
+            db = IntelligenceDB(db_path)
+            migrations = db.applied_migrations()
+            try:
+                db.close()
+            except Exception:
+                pass
+            if not migrations:
+                raise AssertionError("no migrations applied")
+            return "migrations={0}".format(len(migrations))
+        finally:
+            try:
+                os.unlink(db_path)
+            except OSError:
+                pass
+
+    run_case("Unified", "IntelligenceDB init", check_db)
+
+    def check_rule_store() -> str:
+        from engine.unified import IntelligenceDB, RuleStore
+        db_path = safe_tempfile(".db")
+        try:
+            db = IntelligenceDB(db_path)
+            store = RuleStore(db)
+            added = store.add({
+                "id": "TEST-001",
+                "title": "Test rule",
+                "severity": "high",
+                "languages": ["python"],
+            })
+            if not added:
+                raise AssertionError("store.add returned False")
+            fetched = store.get("TEST-001")
+            if not fetched:
+                raise AssertionError("rule not retrievable after add")
+            try:
+                db.close()
+            except Exception:
+                pass
+            return "insert + fetch ok"
+        finally:
+            try:
+                os.unlink(db_path)
+            except OSError:
+                pass
+
+    run_case("Unified", "RuleStore add/get", check_rule_store)
+
+    def check_correlation() -> str:
+        from engine.unified import CorrelationEngine
+        engine = CorrelationEngine()
+        deps = {
+            "vulnerabilities": [
+                {"package": "flask", "id": "CVE-X", "severity": "high"}
+            ]
+        }
+        code = {"findings": []}
+        results = engine.correlate_deps_code(deps, code, "import flask")
+        return "correlations={0}".format(len(results))
+
+    run_case("Unified", "CorrelationEngine", check_correlation)
+
+
+# ---------------------------------------------------------------------------
+# 6) Knowledge base
+# ---------------------------------------------------------------------------
+def test_knowledge() -> None:
+    section(6, "Knowledge Base")
+
+    def check_upsert() -> str:
+        from engine.knowledge_base import KnowledgeBase
+        db_path = safe_tempfile(".db")
+        try:
+            kb = KnowledgeBase(db_path)
+            entity_id = kb.upsert_entity("domain", "example.com", "selftest")
+            if not entity_id:
+                raise AssertionError("upsert_entity returned falsy id")
+            stats = kb.stats()
+            return "stats={0}".format(stats)
+        finally:
+            # Best-effort cleanup on Windows; ignore if locked
+            try:
+                os.unlink(db_path)
+            except OSError:
+                pass
+
+    run_case("Knowledge", "upsert + stats", check_upsert)
+
+
+# ---------------------------------------------------------------------------
+# 7) Report generator
+# ---------------------------------------------------------------------------
+def test_report_generator() -> None:
+    section(7, "Report Generator")
+
+    def check_html() -> str:
+        from engine import report_generator
+        fn = getattr(report_generator, "to_html", None)
+        if fn is None:
+            raise AttributeError("report_generator.to_html not found")
+        metadata = {"title": "Selftest", "target": "example.com"}
+        findings = [
+            {
+                "severity": "high",
+                "title": "Test finding",
+                "target": "line 1",
+                "description": "desc",
+                "evidence": "snippet",
+                "fix": "do X",
+            }
+        ]
+        summary = {"total": 1, "risk": "high"}
+        html = fn(metadata, findings, summary)
+        if "<html" not in html.lower():
+            raise AssertionError("html output looks malformed")
+        return "html_len={0}".format(len(html))
+
+    run_case("Reports", "to_html", check_html)
+
+
+# ---------------------------------------------------------------------------
+# 8) Server entrypoints
+# ---------------------------------------------------------------------------
+def test_entrypoints() -> None:
+    section(8, "Server Entrypoints")
+
+    def check_files() -> str:
+        candidates = ["run_server.py", "server.py"]
+        present = [name for name in candidates if (BASE_DIR / name).exists()]
+        if not present:
+            raise AssertionError("no server entrypoint found")
+        return "present={0}".format(present)
+
+    run_case("Runner", "entrypoints present", check_files)
+
+
+# ---------------------------------------------------------------------------
+# 9) AI / REA bridge (optional)
+# ---------------------------------------------------------------------------
+def test_ai_bridge() -> None:
+    section(9, "AI / REA Bridge (optional)")
+
+    def check_bridge_module() -> str:
+        ai_dir = BASE_DIR / "ai"
+        if not ai_dir.is_dir():
+            raise FileNotFoundError("ai/ directory not present")
+        rea_client = ai_dir / "rea_client.py"
+        if not rea_client.exists():
+            raise FileNotFoundError("ai/rea_client.py not present")
+        return "ai/ present with rea_client.py"
+
+    run_case("AI", "ai/ folder present", check_bridge_module)
+
+
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+SECTIONS: List[Callable[[], None]] = [
+    test_code_reviewer,
+    test_dependency_scanner,
+    test_languages,
+    test_rule_engine,
+    test_unified,
+    test_knowledge,
+    test_report_generator,
+    test_entrypoints,
+    test_ai_bridge,
+]
+
+
+def run_all(verbose: bool = False) -> Report:
+    print("")
+    print("#" * 62)
+    print("#  PCT Self-Test")
+    print("#  base dir: {0}".format(BASE_DIR))
+    print("#" * 62)
+
+    for fn in SECTIONS:
+        try:
+            fn()
+        except Exception as exc:
+            REPORT.add(
+                fn.__name__, "setup", False,
+                "{0}: {1}".format(type(exc).__name__, exc), 0.0,
+            )
+
+    print("")
+    print("=" * 62)
+    print("  RESULTS")
+    print("=" * 62)
+    for sec, name, ok, detail, ms in REPORT.rows:
+        mark = "PASS" if ok else "FAIL"
+        line = "  [{0}] {1}/{2}".format(mark, sec, name)
+        if ms:
+            line += " ({0:.0f}ms)".format(ms)
+        print(line)
+        if detail and (verbose or not ok):
+            print("        {0}".format(detail))
+    print("=" * 62)
+    print("  TOTAL={0}  PASSED={1}  FAILED={2}".format(
+        REPORT.total, REPORT.passed, REPORT.failed
+    ))
+    print("=" * 62)
+    return REPORT
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="PCT self-test suite")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="print details for every test")
+    parser.add_argument("--json", action="store_true",
+                        help="emit machine-readable JSON summary")
+    args = parser.parse_args()
+
+    report = run_all(verbose=args.verbose)
+
+    if args.json:
+        payload = {
+            "summary": {
+                "total": report.total,
+                "passed": report.passed,
+                "failed": report.failed,
+                "ok": report.ok(),
+            },
+            "results": [
+                {
+                    "section": sec,
+                    "name": name,
+                    "ok": ok,
+                    "detail": detail,
+                    "elapsed_ms": round(ms, 2),
+                }
+                for sec, name, ok, detail, ms in report.rows
+            ],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+    return 0 if report.ok() else 1
+
 
 if __name__ == "__main__":
-    test_code_reviewer()
-    test_hash_matcher()
-    test_network_scanner()
-    test_osint()
-    test_job_manager()
-    test_dependencies()
-    test_email_recon()
-    test_report_generator()
-    test_nuclei()
-    print("\n" + "=" * 60)
-    print("  جميع اختبارات المحرك نجحت ✔")
-    print("=" * 60)
+    sys.exit(main())

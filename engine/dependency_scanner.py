@@ -23,6 +23,8 @@ _REQ_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)\s*([<>=!~].*?)?\s*(?:;\s*.+)?$")
 
 
 def parse_requirements_txt(content):
+    content = str(content or "").replace("\r\n", "\n").replace("\n", "\n").replace("\r", "\n")
+    content = content.encode("ascii", errors="ignore").decode("ascii")
     packages = []
     for raw in content.splitlines():
         line = raw.strip()

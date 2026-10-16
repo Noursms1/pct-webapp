@@ -1,0 +1,13 @@
+{
+  "name": "pct-rea-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx rea_bridge.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

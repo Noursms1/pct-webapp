@@ -79,7 +79,12 @@ def to_html(metadata, findings, summary):
     cards = []
     for index, finding in enumerate(findings, 1):
         cards.append(f'<article><b class="sev-{esc(finding["severity"])}">{esc(finding["severity"].upper())}</b><h2>#{index} {esc(finding["title"])}</h2><p><code>{esc(finding["target"])}</code></p><p>{esc(finding["description"])}</p><pre>{esc(finding["evidence"])}</pre><strong>Remediation</strong><p>{esc(finding["fix"])}</p></article>')
-    return f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>{esc(metadata["title"])}</title><style>body{{font-family:Arial;background:#0b1020;color:#e6ecff;max-width:980px;margin:30px auto}}article{{background:#141c33;border:1px solid #233052;border-radius:12px;padding:18px;margin:18px 0}}pre{{background:#080d1a;padding:12px;overflow:auto}}.sev-critical{{color:#fecaca}}.sev-high{{color:#fed7aa}}.sev-medium{{color:#fef3c7}}.sev-low{{color:#bfdbfe}}</style></head><body><h1>{esc(metadata["title"])}</h1><p>Target: <code>{esc(metadata["target"])}</code> · Findings: {summary["total"]} · Risk: {esc(summary["risk"])}</p>{''.join(cards) or '<p>No findings.</p>'}</body></html>'
+    cards_html = "".join(cards) or "<p>No findings.</p>"
+    title = esc(metadata["title"])
+    target = esc(metadata["target"])
+    risk = esc(summary["risk"])
+    total = summary["total"]
+    return f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>{title}</title><style>body{{font-family:Arial;background:#0b1020;color:#e6ecff;max-width:980px;margin:30px auto}}article{{background:#141c33;border:1px solid #233052;border-radius:12px;padding:18px;margin:18px 0}}pre{{background:#080d1a;padding:12px;overflow:auto}}.sev-critical{{color:#fecaca}}.sev-high{{color:#fed7aa}}.sev-medium{{color:#fef3c7}}.sev-low{{color:#bfdbfe}}</style></head><body><h1>{title}</h1><p>Target: <code>{target}</code> · Findings: {total} · Risk: {risk}</p>{cards_html}</body></html>'
 
 
 def to_json(metadata, findings, summary):

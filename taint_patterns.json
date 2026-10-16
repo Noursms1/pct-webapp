@@ -1,0 +1,6 @@
+{
+  "_comment": "PCT taint patterns",
+  "suspicious_param_names": ["form_data", "raw_body", "request_body", "post_data", "body", "argument", "args"],
+  "suspicious_suffixes": ["_payload", "_arg", "_value", "_ref", "_xml", "_html"],
+  "extra_taint_sources": ["request.get_data", "request.stream", "os.environ", "sys.stdin"]
+}

@@ -9,7 +9,7 @@ class RuleStore:
   r=self._norm(r)
   if not r:return False
   cols=['id','source','category','languages','frameworks','severity','cwe','owasp','cve','title','description','pattern','remediation','confidence','enabled']
-  self.db.execute(f"INSERT OR REPLACE INTO rules({','.join(cols)}) VALUES({','.join('?' for _ in cols)})",[r.get(k) for k in cols]);return True
+  self.db.execute(f"INSERT OR REPLACE INTO rules({','.join(cols)}) VALUES({','.join('?' for _ in cols)})",[r.get(k) for k in cols]);self.db.conn.commit();return True
  def get(self,rid):return self.db.fetchone('SELECT * FROM rules WHERE id=?',(rid,))
  def search(self,language=None,severity=None,category=None,text=None,limit=100,offset=0):
   q='SELECT * FROM rules WHERE enabled=1';a=[]

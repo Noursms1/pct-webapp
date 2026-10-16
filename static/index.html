@@ -824,19 +824,35 @@ function renderHash(d){
 
 /* --------------------------- Dependencies ------------------------------ */
 async function runDeps(){
-  const file = $("deps-file").files[0];
+  const fileInput = $("deps-file");
   let content = $("deps-text").value.trim();
   let filename = $("deps-name").value.trim() || "inline_requirements.txt";
-  if (file){
+  if (fileInput.files[0]){
+    const file = fileInput.files[0];
     if (file.size > 2 * 1024 * 1024){ alert("الملف كبير (>2MB)."); return; }
     content = await file.text(); filename = file.name;
   }
   if (!content){ alert("أدخل محتوى أو ارفع ملف."); return; }
   $("deps-result-card").style.display = "block";
-  $("deps-summary").innerHTML = `<span class="badge">جارٍ الفحص...</span>`;
+  $("deps-summary").innerHTML = `<span class="badge">جارٍ الفحص... قد يأخذ 30-90 ثانية</span>`;
   $("deps-vulns").innerHTML = "";
-  try { renderDeps(await api("/api/deps/scan", {method:"POST", body:JSON.stringify({content, filename})})); }
-  catch(e){ $("deps-summary").innerHTML = `<div class="alert">فشل الفحص: ${esc(e.message)}</div>`; }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 180000);
+  try{
+    const headers = {"Content-Type":"application/json"};
+    if (TOKEN) headers["X-API-Token"] = TOKEN;
+    const response = await fetch("/api/deps/scan", {method:"POST", headers, body:JSON.stringify({content, filename}), signal:controller.signal});
+    clearTimeout(timer);
+    let body;
+    try { body = await response.json(); } catch (error) { throw new Error("استجابة غير صالحة من السيرفر"); }
+    if (!body.ok) throw new Error(body.error || ("HTTP " + response.status));
+    renderDeps(body.data);
+  }catch(error){
+    clearTimeout(timer);
+    const message = error.name === "AbortError" ? "انتهت المهلة (180 ثانية). جرّب قائمة حزم أقصر." : error.message;
+    $("deps-summary").innerHTML = `<div class="alert">فشل الفحص: ${esc(message)}</div>`;
+    $("deps-vulns").innerHTML = "";
+  }
 }
 
 function loadSampleDeps(){ $("deps-text").value = "flask==3.0.0\\nrequests==2.31.0\\nurllib3==1.26.0\\njinja2==2.11.0\\ndnspython==2.4.0"; }

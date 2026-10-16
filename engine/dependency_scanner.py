@@ -61,20 +61,33 @@ def _parse_pip_audit_output(stdout, stderr, returncode):
     if not isinstance(deps, list):
         deps = []
     result["packages_scanned"] = len(deps)
+    seen = {}
     for dep in deps:
         if not isinstance(dep, dict):
             continue
+        name = dep.get("name", "unknown")
+        version = dep.get("version", "")
         for vuln in dep.get("vulns", []) or []:
             if not isinstance(vuln, dict):
                 continue
-            result["vulnerabilities"].append({
-                "package": dep.get("name", "unknown"),
-                "version": dep.get("version", ""),
-                "id": vuln.get("id", ""),
-                "aliases": vuln.get("aliases", []) or [],
-                "fix_versions": vuln.get("fix_versions", []) or [],
-                "description": (vuln.get("description") or "")[:500],
-            })
+            vuln_id = vuln.get("id", "")
+            if not vuln_id:
+                continue
+            key = (name, version, vuln_id)
+            aliases = list(vuln.get("aliases") or [])
+            if key in seen:
+                for alias in aliases:
+                    if alias not in seen[key]["aliases"]:
+                        seen[key]["aliases"].append(alias)
+                continue
+            description = vuln.get("description") or ""
+            if len(description) > 300:
+                description = description[:297] + "..."
+            seen[key] = {"package": name, "version": version, "id": vuln_id,
+                         "aliases": aliases,
+                         "fix_versions": list(vuln.get("fix_versions") or []),
+                         "description": description}
+    result["vulnerabilities"] = sorted(seen.values(), key=lambda item: (item["package"], item["id"]))
     if returncode not in (0, 1):
         result["error"] = (stderr or f"pip-audit exited with {returncode}").strip()
     return result

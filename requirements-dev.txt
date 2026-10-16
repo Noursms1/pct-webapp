@@ -1,0 +1,3 @@
+# PCT - Development / optional dependencies
+-r requirements.txt
+pip-audit>=2.6.0

@@ -1,7 +1,6 @@
-# PCT Web App - المتطلبات
-# التثبيت: pip install -r requirements.txt
-# dnspython يحسن دقة سجلات DNS، مع fallback داخلي عند غيابه.
-
+# PCT Web App - Core dependencies
 Flask>=3.0.0
 requests>=2.31.0
 dnspython>=2.4.0
+gunicorn>=21.2.0
+waitress>=3.0.0

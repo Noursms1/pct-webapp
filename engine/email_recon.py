@@ -20,7 +20,37 @@ _hibp_lock = threading.Lock()
 _hibp_last = [0.0]
 DOH_URL = "https://cloudflare-dns.com/dns-query"
 DOH_TIMEOUT = 10
+ROLE_LOCALS = {"admin", "info", "support", "sales", "contact", "hello", "help", "noreply", "no-reply", "webmaster", "security"}
+PUBLIC_PROVIDERS = {"gmail.com": "Google", "googlemail.com": "Google", "outlook.com": "Microsoft", "hotmail.com": "Microsoft", "live.com": "Microsoft", "yahoo.com": "Yahoo", "protonmail.com": "Proton Mail"}
+DISPOSABLE_DOMAINS = {"mailinator.com", "10minutemail.com", "guerrillamail.com", "tempmail.com"}
 DKIM_SELECTORS = ("google", "default", "selector1", "selector2", "k1")
+
+
+def normalize_email(value):
+    if not isinstance(value, str):
+        return None
+    email = value.strip().lower()
+    return email if is_valid_email(email) else None
+
+
+def is_valid_email(value):
+    return isinstance(value, str) and len(value) <= 254 and bool(_EMAIL_RE.fullmatch(value.strip())) and value.count("@") == 1 and not value.split("@", 1)[1].startswith(".")
+
+
+def parse_email_parts(email):
+    normalized = normalize_email(email)
+    if not normalized:
+        return None
+    local, domain = normalized.split("@", 1)
+    provider = PUBLIC_PROVIDERS.get(domain, "unknown")
+    return {
+        "local": local, "domain": domain, "provider": provider,
+        "is_public_provider": provider != "unknown",
+        "is_role_based": local in ROLE_LOCALS,
+        "is_disposable": domain in DISPOSABLE_DOMAINS,
+        "gravatar_md5": hashlib.md5(normalized.encode()).hexdigest(),
+        "sha256": hashlib.sha256(normalized.encode()).hexdigest(),
+    }
 
 
 def _is_allowed_url(url):
@@ -71,10 +101,12 @@ def check_github_email(email, timeout=10, max_results=5):
     return result
 
 
-def check_gravatar(email):
-    digest = hashlib.md5(email.strip().lower().encode()).hexdigest()
-    status, _, error = http_get(f"https://www.gravatar.com/avatar/{digest}?d=404", timeout=10)
-    return {"source": "gravatar", "exists": status == 200, "status": status, "error": error}
+def check_gravatar(email_or_hash):
+    value = str(email_or_hash or "").strip().lower()
+    digest = value if re.fullmatch(r"[0-9a-f]{6,64}", value) else hashlib.md5(value.encode()).hexdigest()
+    url = f"https://www.gravatar.com/avatar/{digest}?d=404"
+    status, _, error = http_get(url, timeout=10)
+    return {"source": "gravatar", "exists": status == 200, "status": status, "url": url if status == 200 else None, "error": error}
 
 
 def check_emailrep(email, timeout=10):
@@ -174,10 +206,14 @@ def check_breaches(email, timeout=10):
 
 
 def recon_email(job, params):
-    email = (params.get("email") or "").strip().lower()
-    if not _EMAIL_RE.match(email): raise ValueError("Invalid email")
-    local, domain = email.split("@", 1)
-    result = {"email": email, "email_hash": hashlib.sha256(email.encode()).hexdigest()[:16], "parts": {"local": local, "domain": domain}, "breaches": {"count": 0, "items": [], "available": False, "error": None}, "reputation": None, "gravatar": None, "github": None, "domain_security": None, "errors": []}
+    raw_email = (params.get("email") or "")
+    normalized = normalize_email(raw_email)
+    if not normalized:
+        raise ValueError("Invalid email")
+    email = normalized
+    parts = parse_email_parts(email)
+    local, domain = parts["local"], parts["domain"]
+    result = {"email_hash": hashlib.sha256(email.encode()).hexdigest()[:16], "parts": parts, "breaches": {"count": 0, "items": [], "available": False, "error": None}, "reputation": None, "gravatar": None, "github": None, "domain_security": None, "errors": []}
     if params.get("check_gravatar", True): result["gravatar"] = check_gravatar(email)
     if params.get("check_github", True):
         try:

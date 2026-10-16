@@ -51,6 +51,7 @@ from engine import code_reviewer, network_scanner, hash_matcher
 from engine import osint_dns
 from engine import dependency_scanner
 from engine import subdomain_enum
+from engine import email_recon
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -102,6 +103,10 @@ def run_subdomains(job, params):
     return subdomain_enum.enumerate_subdomains(job, _prepare(params, job))
 
 
+def run_email(job, params):
+    return email_recon.recon_email(job, _prepare(params, job))
+
+
 JOB_RUNNERS = {
     "code": (run_code, lambda p: (p.get("filename") or "inline_code")),
     "network": (run_network, lambda p: p.get("target", "")),
@@ -109,6 +114,7 @@ JOB_RUNNERS = {
     "hash": (run_hash, lambda p: (p.get("hash", "")[:16] + "...")),
     "deps": (run_dependencies, lambda p: p.get("path") or ((p.get("files") or [{}])[0].get("name", "inline"))),
     "subdomains": (run_subdomains, lambda p: p.get("domain", "")),
+    "email": (run_email, lambda p: p.get("email", "")),
 }
 
 
@@ -338,6 +344,23 @@ def subdomains_enum_sync():
     except Exception as exc:
         return fail(exc)
     return ok(result)
+
+
+@app.route("/api/email/recon", methods=["POST"])
+@require_token
+def email_recon_sync():
+    body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip()
+    if not email:
+        return fail("email مطلوب")
+    try:
+        return ok(email_recon.recon_email(None, {
+            "email": email,
+            "check_gravatar": bool(body.get("check_gravatar", True)),
+            "check_github": bool(body.get("check_github", True)),
+        }))
+    except Exception as exc:
+        return fail(exc)
 
 
 @app.errorhandler(404)

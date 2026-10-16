@@ -3,7 +3,19 @@ import unittest
 
 
 def _docker_available() -> bool:
-    return shutil.which('docker') is not None
+    """Return True only if the Docker daemon is actually reachable."""
+    if shutil.which("docker") is None:
+        return False
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 
 # -*- coding: utf-8 -*-

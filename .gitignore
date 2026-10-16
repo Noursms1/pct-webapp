@@ -12,6 +12,9 @@ venv/
 scan_history.json
 PCT_Reports/
 *.log
+server.pid
+server.log
+*.pid
 
 # IDE
 .vscode/

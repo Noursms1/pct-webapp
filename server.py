@@ -307,9 +307,8 @@ def code_scan_sync():
         })
     except Exception as e:
         return fail(e)
-    history.add("code", body.get("filename") or "inline_code",
-                f"lines={result['lines']}, findings={result['total_findings']}",
-                result)
+    entry = history.add("code", body.get("filename") or "inline_code", f"lines={result['lines']}, findings={result['total_findings']}", result)
+    result["entry_id"] = entry["id"]
     return ok(result)
 
 
@@ -329,8 +328,10 @@ def deps_scan_sync():
             result = dependency_scanner.scan_dependencies(None, {"files": files})
     except Exception as exc:
         return fail(exc)
+    target = body.get("filename") or (files[0].get("name") if files else "inline")
+    entry = history.add("deps", target, f"files={result.get('files_scanned', 0)}, vulns={result.get('vulnerabilities_total', 0)}", result)
+    result["entry_id"] = entry["id"]
     return ok(result)
-
 
 
 @app.route("/api/subdomains/enum", methods=["POST"])
@@ -350,6 +351,8 @@ def subdomains_enum_sync():
         })
     except Exception as exc:
         return fail(exc)
+    entry = history.add("subdomains", domain, f"count={result.get('count', 0)}", result)
+    result["entry_id"] = entry["id"]
     return ok(result)
 
 
@@ -361,13 +364,17 @@ def email_recon_sync():
     if not email:
         return fail("email مطلوب")
     try:
-        return ok(email_recon.recon_email(None, {
+        result = email_recon.recon_email(None, {
             "email": email,
             "check_gravatar": bool(body.get("check_gravatar", True)),
             "check_github": bool(body.get("check_github", True)),
             "check_breach": bool(body.get("check_breach", True)),
             "check_rep": bool(body.get("check_rep", True)),
-            "check_domain": bool(body.get("check_domain", True)),        }))
+            "check_domain": bool(body.get("check_domain", True)),
+        })
+        entry = history.add("email", result.get("email_hash") or email[:16], f"breaches={result.get('breaches', {}).get('count', 0)}", result)
+        result["entry_id"] = entry["id"]
+        return ok(result)
     except Exception as exc:
         return fail(exc)
 
@@ -379,7 +386,12 @@ def nuclei_scan_sync():
     if not body.get("targets"):
         return fail("targets مطلوبة")
     try:
-        return ok(nuclei_scanner.scan_with_nuclei(None, body))
+        result = nuclei_scanner.scan_with_nuclei(None, body)
+        targets = body.get("targets")
+        target = targets[0] if isinstance(targets, list) and targets else str(targets or "?")
+        entry = history.add("nuclei", target, f"count={result.get('count', 0)}", result)
+        result["entry_id"] = entry["id"]
+        return ok(result)
     except Exception as exc:
         return fail(exc)
 

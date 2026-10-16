@@ -34,7 +34,8 @@ class ServerTestCase(unittest.TestCase):
     def body(self, response):
         return json.loads(response.data.decode("utf-8"))
 
-
+    def _json(self, response):
+        return self.body(response)
 class TestHealthMeta(ServerTestCase):
     def test_health_rules_stats_404_index(self):
         self.assertEqual(self.client.get("/api/health").status_code, 200)
@@ -129,5 +130,26 @@ class TestNewEndpoints(ServerTestCase):
         self.assertIn("SQLi", self.body(response)["data"]["content"])
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+class TestReportIntegration(ServerTestCase):
+    def test_sync_scan_returns_entry_id(self):
+        body = self._json(self.client.post("/api/code/scan", json={"code": "x=1", "filename": "t.py"}))
+        self.assertIsInstance(body["data"]["entry_id"], int)
+        self.assertEqual(len(self.server.history.list()), 1)
+
+    def test_report_by_entry_id(self):
+        first = self._json(self.client.post("/api/code/scan", json={"code": "x=1"}))
+        entry_id = first["data"]["entry_id"]
+        response = self.client.post("/api/report/generate", json={"entry_ids": [entry_id], "format": "markdown"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._json(response)["data"]["entries_used"], [entry_id])
+
+    def test_job_returns_entry_id(self):
+        response = self.client.post("/api/jobs", json={"type": "code", "params": {"code": "x=1"}})
+        job_id = self._json(response)["data"]["id"]
+        for _ in range(50):
+            state = self._json(self.client.get(f"/api/jobs/{job_id}"))["data"]
+            if state["status"] in ("done", "error"):
+                break
+            time.sleep(0.05)
+        self.assertEqual(state["status"], "done")
+        self.assertIsInstance(state["entry_id"], int)

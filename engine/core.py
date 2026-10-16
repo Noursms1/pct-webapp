@@ -84,7 +84,7 @@ class Job:
     """حاوية نتيجة مهمة واحدة."""
 
     __slots__ = ("id", "type", "target", "status", "progress", "result",
-                 "error", "created_at", "finished_at", "_cancel")
+                 "error", "created_at", "finished_at", "_cancel", "entry_id")
 
     def __init__(self, job_id, job_type, target):
         self.id = job_id
@@ -97,6 +97,7 @@ class Job:
         self.created_at = time.time()
         self.finished_at = None
         self._cancel = threading.Event()
+        self.entry_id = None
 
     def to_dict(self, with_result=False):
         d = {
@@ -110,6 +111,8 @@ class Job:
         }
         if self.error:
             d["error"] = self.error
+        if self.entry_id is not None:
+            d["entry_id"] = self.entry_id
         if with_result and self.result is not None:
             d["result"] = self.result
         return d
@@ -163,7 +166,6 @@ class JobManager:
             params.setdefault("_stop_event", job._cancel)
             result = func(job, params)
             job.result = result
-            job.status = "done"
         except Exception as e:
             job.status = "error"
             job.error = str(e)
@@ -171,12 +173,14 @@ class JobManager:
             job.finished_at = time.time()
             self._sem.release()
             # تسجيل في السجل
-            if self.history is not None and job.status == "done":
+            if self.history is not None and job.status == "running":
                 try:
                     summary = _summarize(job)
-                    self.history.add(job.type, job.target, summary, job.result)
+                    entry = self.history.add(job.type, job.target, summary, job.result)
+                    job.entry_id = entry.get("id")
                 except Exception:
                     pass
+                job.status = "done"
 
     # ------------------------------------------------------------------ #
     def get(self, job_id, with_result=True):

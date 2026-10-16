@@ -44,6 +44,7 @@ from engine import JobManager, HistoryManager
 from engine.core import Progress
 from engine import code_reviewer, network_scanner, hash_matcher
 from engine import osint_dns
+from engine import dependency_scanner
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -87,11 +88,16 @@ def run_hash(job, params):
     return hash_matcher.crack_hash(job, _prepare(params, job))
 
 
+def run_dependencies(job, params):
+    return dependency_scanner.scan_dependencies(job, _prepare(params, job))
+
+
 JOB_RUNNERS = {
     "code": (run_code, lambda p: (p.get("filename") or "inline_code")),
     "network": (run_network, lambda p: p.get("target", "")),
     "osint": (run_osint, lambda p: p.get("target", "")),
     "hash": (run_hash, lambda p: (p.get("hash", "")[:16] + "...")),
+    "deps": (run_dependencies, lambda p: p.get("path") or ((p.get("files") or [{}])[0].get("name", "inline"))),
 }
 
 
@@ -283,9 +289,25 @@ def code_scan_sync():
     return ok(result)
 
 
-# ===========================================================================
-# Error handlers
-# ===========================================================================
+@app.route("/api/deps/scan", methods=["POST"])
+@require_token
+def deps_scan_sync():
+    body = request.get_json(silent=True) or {}
+    content = body.get("content")
+    files = body.get("files")
+    if not content and not files:
+        return fail("لا يوجد محتوى لفحصه")
+    try:
+        if content:
+            result = dependency_scanner.scan_requirements_content(
+                content, filename=body.get("filename", "inline_requirements.txt"))
+        else:
+            result = dependency_scanner.scan_dependencies(None, {"files": files})
+    except Exception as exc:
+        return fail(exc)
+    return ok(result)
+
+
 
 @app.errorhandler(404)
 def not_found(e):

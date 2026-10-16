@@ -55,26 +55,47 @@ def available_languages():
 def _run_docker(language, code, timeout, max_output):
     cfg = LANGUAGES[language]
     image = cfg["image"]
+    filename = f"code{cfg['ext']}"
+    work_file = f"/work/{filename}"
+    interpreter = " ".join(cfg["cmd"]).replace(f"/work/code{cfg['ext']}", work_file)
+
     if not image_present(image):
         ok, error = pull_image(image)
         if not ok:
             return {"ok": False, "mode": "docker", "error": f"فشل تنزيل الصورة {image}: {error}"}
-    tmpdir = tempfile.mkdtemp(prefix="pct_run_")
+
+    wrapper = f"cat > {work_file} && exec {interpreter}"
+    command = [
+        "docker", "run", "--rm", "-i",
+        "--network=none",
+        "--memory=256m", "--memory-swap=256m",
+        "--cpus=1.0",
+        "--pids-limit=64",
+        "--read-only",
+        "--tmpfs", "/work:size=16m,mode=1777",
+        "--tmpfs", "/tmp:size=32m,mode=1777",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "-e", "PYTHONIOENCODING=utf-8",
+        "-e", "PYTHONDONTWRITEBYTECODE=1",
+        "-e", "NODE_OPTIONS=--max-old-space-size=128",
+        "-w", "/work", image, "sh", "-c", wrapper,
+    ]
+    start = time.time()
     try:
-        code_path = Path(tmpdir) / f"code{cfg['ext']}"
-        code_path.write_text(code, encoding="utf-8")
-        command = ["docker", "run", "--rm", "--network=none", "--memory=256m", "--memory-swap=256m", "--cpus=1.0", "--pids-limit=64", "--read-only", "--tmpfs", "/tmp:size=32m", "--cap-drop=ALL", "--security-opt=no-new-privileges", "-v", f"{tmpdir}:/work:ro", "-w", "/work", image] + cfg["cmd"]
-        start = time.time()
-        try:
-            proc = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 15)
-            stdout, stderr = proc.stdout or "", proc.stderr or ""
-            return {"ok": True, "mode": "docker", "image": image, "exit_code": proc.returncode, "stdout": stdout[:max_output], "stderr": stderr[:max_output], "elapsed": round(time.time() - start, 3), "truncated": len(stdout) > max_output or len(stderr) > max_output}
-        except subprocess.TimeoutExpired as exc:
-            return {"ok": False, "mode": "docker", "image": image, "error": f"Timeout after {timeout}s", "stdout": str(exc.stdout or "")[:max_output], "stderr": str(exc.stderr or "")[:max_output]}
+        proc = subprocess.run(command, input=code.encode("utf-8"), capture_output=True, timeout=timeout + 15)
+        elapsed = round(time.time() - start, 3)
+        stdout_raw = proc.stdout or b""
+        stderr_raw = proc.stderr or b""
+        stdout = stdout_raw.decode("utf-8", "ignore") if isinstance(stdout_raw, bytes) else str(stdout_raw)
+        stderr = stderr_raw.decode("utf-8", "ignore") if isinstance(stderr_raw, bytes) else str(stderr_raw)
+        return {"ok": True, "mode": "docker", "image": image, "exit_code": proc.returncode, "stdout": stdout[:max_output], "stderr": stderr[:max_output], "elapsed": elapsed, "truncated": len(stdout) > max_output or len(stderr) > max_output}
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout.decode("utf-8", "ignore") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        stderr = exc.stderr.decode("utf-8", "ignore") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        return {"ok": False, "mode": "docker", "image": image, "error": f"Timeout after {timeout}s", "stdout": stdout[:max_output], "stderr": stderr[:max_output]}
     except Exception as exc:
         return {"ok": False, "mode": "docker", "error": str(exc)}
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def run_code(job, params):

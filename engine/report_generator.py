@@ -64,7 +64,10 @@ def to_markdown(metadata, findings, summary):
     lines += [f"| **{severity.capitalize()}** | {summary['counts'][severity]} |" for severity in SEVERITY_ORDER if summary["counts"][severity]]
     lines += [f"| **Total** | **{summary['total']}** |", "", f"**Overall risk:** `{summary['risk'].upper()}`", ""]
     for index, finding in enumerate(findings, 1):
-        lines += [f"## Finding #{index}: {finding['title']}", "", f"- **Source:** {finding['source']}", f"- **Severity:** {finding['severity'].upper()}", f"- **Target:** `{finding['target']}`", ""]
+        lines += [f"## Finding #{index}: {finding['title']}", "", f"- **Source:** {finding['source']}", f"- **Severity:** {finding['severity'].upper()}", f"- **Target:** `{finding['target']}`"]
+        if finding.get("cwe"): lines.append(f"- **CWE:** {finding['cwe']}")
+        if finding.get("cvss"): lines.append(f"- **CVSS:** {finding['cvss']}")
+        lines.append("")
         if finding["description"]: lines += ["### Description", "", finding["description"], ""]
         if finding["evidence"]: lines += ["### Evidence", "", "```", str(finding["evidence"])[:1000], "```", ""]
         if finding["fix"]: lines += ["### Remediation", "", finding["fix"], ""]

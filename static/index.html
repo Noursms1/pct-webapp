@@ -126,6 +126,7 @@
   <button data-tab="email">فحص الإيميل</button>
   <button data-tab="nuclei">Nuclei</button>
   <button data-tab="report">التقارير</button>
+  <button data-tab="runner">المشغّل</button>
   <button data-tab="jobs">المهام الحية</button>
   <button data-tab="history">سجل الفحوصات</button>
 </nav>
@@ -367,7 +368,10 @@
 <section id="tab-nuclei"><div class="card"><h2>Nuclei Scanner</h2><p class="hint">فحص اختياري عبر ProjectDiscovery Nuclei. استخدمه على أهداف مصرح بها فقط.</p><div id="nuclei-status" class="alert info">جارٍ التحقق من nuclei...</div><div class="field"><label>الأهداف</label><textarea id="nuclei-targets" rows="6" placeholder="https://example.com"></textarea></div><div class="grid g3"><div class="field"><label>الخطورة</label><input id="nuclei-severity" placeholder="critical,high,medium"></div><div class="field"><label>Tags</label><input id="nuclei-tags" placeholder="cve,rce,xss"></div><div class="field"><label>Rate limit</label><input id="nuclei-rate" type="number" value="50" min="1" max="500"></div></div><div class="row"><button class="primary" onclick="runNuclei()">بدء الفحص</button><button onclick="loadLastSubdomains()">استخدم آخر Subdomains</button></div></div><div class="card" id="nuclei-result-card" style="display:none"><h2>النتائج</h2><div id="nuclei-summary"></div><div id="nuclei-findings"></div></div></section>
 
 <!-- ==================== Reports ==================== -->
-<section id="tab-report"><div class="card"><h2>مولّد التقارير</h2><p class="hint">اختر فحوصات من السجل ثم ولّد التقرير.</p><div class="row"><label>الصيغة:</label><select id="rep-format" style="width:auto"><option value="html">HTML</option><option value="markdown">Markdown</option><option value="json">JSON</option></select><input id="rep-title" placeholder="عنوان التقرير" style="flex:1"><button class="small" onclick="loadHistoryForReport()">تحديث</button><button class="small" onclick="selectAllHistory(true)">تحديد الكل</button><button class="small" onclick="selectAllHistory(false)">إلغاء</button></div><div id="rep-history-list" class="empty">جارٍ التحميل...</div><div class="row"><button class="primary" onclick="runReport()">توليد التقرير</button><span id="rep-selected-count" class="badge">0 محدد</span></div></div><div class="card" id="rep-result-card" style="display:none"><h2>التقرير</h2><div id="rep-summary"></div><button class="small" onclick="downloadReport()">تنزيل</button><div id="rep-output"></div></div></section>
+<section id="tab-report"><div class="card"><h2>مولّد التقارير</h2><p class="hint">اختر فحوصات من السجل ثم ولّد التقرير.</p><div class="row"><label>الصيغة:</label><select id="rep-format" style="width:auto"><option value="html">HTML</option><option value="markdown">Markdown</option><option value="json">JSON</option></select><input id="rep-title" placeholder="عنوان التقرير" style="flex:1"><button class="small" onclick="loadHistoryForReport()">تحديث</button><button class="small" onclick="selectAllHistory(true)">تحديد الكل</button><button class="small" onclick="selectAllHistory(false)">إلغاء</button></div><div id="rep-history-list" class="empty">جارٍ التحميل...</div><div class="row"><button class="primary" onclick="runReport()">توليد التقرير</button><button onclick="downloadSelectedReports()">تنزيل المحدد</button><span id="rep-selected-count" class="badge">0 محدد</span></div></div><div class="card" id="rep-result-card" style="display:none"><h2>التقرير</h2><div id="rep-summary"></div><button class="small" onclick="downloadReport()">تنزيل</button><div id="rep-output"></div></div></section>
+
+<!-- ==================== Code Runner ==================== -->
+<section id="tab-runner"><div class="card"><h2>مشغّل الأكواد — Docker Sandbox</h2><div class="alert info" id="runner-warn">🔒 لا شبكة، read-only، cap-drop=ALL.</div><div class="grid g3"><div class="field"><label>اللغة</label><select id="run-lang"></select></div><div class="field"><label>Timeout</label><input id="run-timeout" type="number" value="15" min="1" max="120"></div><div class="field"><label>حد المخرجات KB</label><input id="run-maxout" type="number" value="64" min="1" max="1024"></div></div><textarea id="run-code" rows="12" placeholder="print('Hello')" style="margin-top:12px;direction:ltr;text-align:left"></textarea><div class="row"><button class="primary" onclick="runCodeExec()">تشغيل</button><label class="check"><input type="checkbox" id="run-auth"> أؤكد التصريح</label><span id="run-status" class="badge"></span></div></div><div class="card" id="run-result-card" style="display:none"><h2>النتيجة</h2><div id="run-meta"></div><div id="run-output"></div></div></section>
 
 <!-- ==================== Jobs ==================== -->
 <section id="tab-jobs">
@@ -443,6 +447,7 @@ document.querySelectorAll("nav button").forEach(btn => {
     $("tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "jobs") loadJobs();
     if (btn.dataset.tab === "history") loadHistory();
+    if (btn.dataset.tab === "runner") loadRunnerLangs();
     if (btn.dataset.tab === "report") loadHistoryForReport();
     if (btn.dataset.tab === "dash") loadStats();
   });
@@ -963,14 +968,30 @@ function renderNuclei(result){
 }
 document.querySelector('button[data-tab="nuclei"]')?.addEventListener("click", checkNucleiStatus);
 
-/* --------------------------- Reports ----------------------------------- */
+/* --------------------------- Code Runner ------------------------------- */
+async function loadRunnerLangs(){try{const langs=await api('/api/run/languages');const select=$("run-lang");select.innerHTML='';Object.entries(langs).forEach(([key,info])=>{const option=document.createElement('option');option.value=key;option.textContent=info.label+(info.present?' ✓':info.docker?' (تنزيل عند التشغيل)':' (Docker غير متوفر)');option.disabled=!info.available;select.appendChild(option);});}catch(e){$("runner-warn").textContent='Docker غير متوفر';}}
+async function runCodeExec(){const code=$("run-code").value;if(!code.trim()){alert('أدخل كودًا');return;}if(!$("run-auth").checked){alert('أكد التصريح أولًا');return;}$("run-result-card").style.display='block';$("run-status").textContent='جارٍ التشغيل...';try{const result=await api('/api/run',{method:'POST',body:JSON.stringify({code,language:$("run-lang").value,timeout:parseInt($("run-timeout").value)||15,max_output:(parseInt($("run-maxout").value)||64)*1024,i_am_authorized:true})});$("run-status").textContent='اكتمل';$("run-meta").innerHTML=`<span class="badge">${esc(result.mode)} · exit=${result.exit_code}</span>`;$("run-output").innerHTML=`${result.error?`<div class="alert">${esc(result.error)}</div>`:''}${result.stdout?`<pre>${esc(result.stdout)}</pre>`:''}${result.stderr?`<pre>${esc(result.stderr)}</pre>`:''}`;}catch(e){$("run-status").textContent='فشل';$("run-output").innerHTML=`<div class="alert">${esc(e.message)}</div>`;}}
+function clearRunner(){$("run-code").value='';$("run-result-card").style.display='none';}
+
 let _repLastResult = null;
-async function loadHistoryForReport(){ const list=await api('/api/history?limit=100'); $("rep-history-list").innerHTML=list.length?`<table><tbody>${list.map((e,i)=>`<tr><td><input type="checkbox" class="rep-checkbox" value="${e.id}" ${i===0?'checked':''} onchange="_updateSelectedCount()"></td><td>#${e.id}</td><td>${esc(e.type)}</td><td>${esc(e.target||'')}</td><td>${esc(e.summary||'')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">لا يوجد سجل.</div>'; _updateSelectedCount(); }
+async function loadHistoryForReport(){
+  try{
+    const list=await api('/api/history?limit=100');
+    if(!list.length){ $("rep-history-list").innerHTML='<div class="empty">لا يوجد سجل.</div>'; return; }
+    $("rep-history-list").innerHTML=`<table><tbody>${list.sort((a,b)=>b.id-a.id).map((e,i)=>`<tr><td><input type="checkbox" class="rep-checkbox" value="${e.id}" ${i===0?'checked':''} onchange="_updateSelectedCount()"></td><td>#${e.id}</td><td>${esc(e.type)}</td><td>${esc(e.target||'')}</td><td>${esc(e.summary||'')}</td><td><button class="small" onclick="quickReport(${e.id})">📄</button><button class="small" onclick="downloadSingleReport(${e.id})">⬇️</button></td></tr>`).join('')}</tbody></table>`;
+    _updateSelectedCount();
+  }catch(e){ $("rep-history-list").innerHTML=`<div class="alert">فشل التحميل: ${esc(e.message)}</div>`; }
+}
 function _updateSelectedCount(){ $("rep-selected-count").textContent=document.querySelectorAll('.rep-checkbox:checked').length+' محدد'; }
 function selectAllHistory(value){ document.querySelectorAll('.rep-checkbox').forEach(cb=>cb.checked=value); _updateSelectedCount(); }
-async function runReport(){ const ids=[...document.querySelectorAll('.rep-checkbox:checked')].map(cb=>parseInt(cb.value,10)); if(!ids.length){alert('اختر فحصًا');return;} $("rep-result-card").style.display='block'; try{_repLastResult=await api('/api/report/generate',{method:'POST',body:JSON.stringify({entry_ids:ids,format:$("rep-format").value,title:$("rep-title").value||null})}); renderReport(_repLastResult);}catch(e){$("rep-summary").innerHTML=`<div class="alert">${esc(e.message)}</div>`;} }
-function renderReport(r){$("rep-summary").innerHTML=`<span class="badge">${esc(r.format)} · Findings: ${r.summary.total} · Risk: ${esc(r.summary.risk)}</span>`; $("rep-output").innerHTML=r.format==='html'?`<iframe srcdoc="${esc(r.content)}" style="width:100%;height:600px"></iframe>`:`<pre>${esc(r.format==='json'?JSON.stringify(r.content,null,2):r.content)}</pre>`;}
-function downloadReport(){if(!_repLastResult){return;}const r=_repLastResult;const content=r.format==='json'?JSON.stringify(r.content,null,2):r.content;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type:r.mime}));a.download=`pct_report_${Date.now()}.${r.format}`;a.click();}
+async function runReport(){ const ids=[...document.querySelectorAll('.rep-checkbox:checked')].map(cb=>parseInt(cb.value,10)); if(!ids.length){alert('اختر فحصًا');return;} $("rep-result-card").style.display='block'; try{_repLastResult=await api('/api/report/generate',{method:'POST',body:JSON.stringify({entry_ids:ids,format:$("rep-format").value,title:$("rep-title").value||null})});renderReport(_repLastResult);}catch(e){$("rep-summary").innerHTML=`<div class="alert">${esc(e.message)}</div>`;} }
+function renderReport(r){ $("rep-summary").innerHTML=`<span class="badge">${esc(r.format)} · Findings: ${r.summary.total} · Risk: ${esc(r.summary.risk)}</span>`; $("rep-output").innerHTML=r.format==='html'?`<iframe srcdoc="${esc(r.content)}" style="width:100%;height:600px"></iframe>`:`<pre>${esc(r.format==='json'?JSON.stringify(r.content,null,2):r.content)}</pre>`; }
+function _downloadBlob(r,base){const content=r.format==='json'?JSON.stringify(r.content,null,2):r.content;const url=URL.createObjectURL(new Blob([content],{type:r.mime}));const a=document.createElement('a');a.href=url;a.download=`${base}_${Date.now()}.${r.format==='md'?'md':r.format}`;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
+function _flashToast(message){let t=$("_toast");if(!t){t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0e7490;color:white;padding:10px 20px;border-radius:8px;z-index:9999';document.body.appendChild(t);}t.textContent=message;t.style.opacity='1';clearTimeout(t._timer);t._timer=setTimeout(()=>t.style.opacity='0',2000);}
+async function downloadSingleReport(id){try{const r=await api('/api/report/generate',{method:'POST',body:JSON.stringify({entry_ids:[id],format:$("rep-format").value,title:$("rep-title").value||null})});_downloadBlob(r,`pct_report_${id}`);_flashToast(`تم تنزيل تقرير #${id}`);}catch(e){alert('فشل التنزيل: '+e.message);}}
+async function downloadSelectedReports(){const ids=[...document.querySelectorAll('.rep-checkbox:checked')].map(cb=>parseInt(cb.value,10));if(!ids.length){alert('اختر فحصًا');return;}try{const r=await api('/api/report/generate',{method:'POST',body:JSON.stringify({entry_ids:ids,format:$("rep-format").value,title:$("rep-title").value||null})});_downloadBlob(r,`pct_report_${ids.length}entries`);_flashToast(`تم تنزيل تقرير ${ids.length} فحوصات`);}catch(e){alert('فشل التنزيل: '+e.message);}}
+function downloadReport(){if(_repLastResult)_downloadBlob(_repLastResult,'pct_report');}
+function quickReport(id){document.querySelector('button[data-tab="report"]').click();loadHistoryForReport().then(()=>{document.querySelectorAll('.rep-checkbox').forEach(cb=>cb.checked=false);const cb=document.querySelector(`.rep-checkbox[value="${id}"]`);if(cb)cb.checked=true;_updateSelectedCount();});}
 
 /* --------------------------- History ----------------------------------- */
 async function loadHistory(){

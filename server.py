@@ -54,6 +54,7 @@ from engine import subdomain_enum
 from engine import email_recon
 from engine import nuclei_scanner
 from engine import report_generator
+from engine import code_runner
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -65,7 +66,22 @@ app.config["JSON_AS_ASCII"] = False
 history = HistoryManager(HISTORY_FILE)
 jobs = JobManager(max_workers=4, history=history)
 
-API_TOKEN = None
+import time
+_RATE_BUCKETS = {}
+def rate_limit(limit, window, name):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapped(*args, **kwargs):
+            key = (name, request.remote_addr or "local")
+            now = time.time(); bucket = _RATE_BUCKETS.setdefault(key, [])
+            _RATE_BUCKETS[key] = [stamp for stamp in bucket if now - stamp < window]
+            if len(_RATE_BUCKETS[key]) >= limit:
+                return fail("تم تجاوز حد الطلبات", 429)
+            _RATE_BUCKETS[key].append(now)
+            return fn(*args, **kwargs)
+        return wrapped
+    return decorator
+
 
 # ===========================================================================
 # Job Runners / مشغّلات المهام
@@ -113,6 +129,10 @@ def run_nuclei(job, params):
     return nuclei_scanner.scan_with_nuclei(job, _prepare(params, job))
 
 
+def run_code_exec(job, params):
+    return code_runner.run_code(job, _prepare(params, job))
+
+
 JOB_RUNNERS = {
     "code": (run_code, lambda p: (p.get("filename") or "inline_code")),
     "network": (run_network, lambda p: p.get("target", "")),
@@ -122,7 +142,7 @@ JOB_RUNNERS = {
     "subdomains": (run_subdomains, lambda p: p.get("domain", "")),
     "email": (run_email, lambda p: p.get("email", "")),
     "nuclei": (run_nuclei, lambda p: (p.get("targets") or ["?"])[0] if isinstance(p.get("targets"), list) else str(p.get("targets") or "?")),
-}
+    "run": (run_code_exec, lambda p: p.get("language") or "python"),}
 
 
 # ===========================================================================
@@ -414,6 +434,33 @@ def report_generate():
         return ok(report_generator.generate_report(None, {"history_file": HISTORY_FILE, "entry_ids": body.get("entry_ids"), "last_n": int(body.get("last_n", 20)), "target": body.get("target"), "title": body.get("title"), "format": body.get("format", "html")}))
     except Exception as exc:
         return fail(exc)
+
+
+@app.route("/api/run/languages")
+@rate_limit(60, 60, "run_langs")
+def run_languages():
+    return ok(code_runner.available_languages())
+
+
+@app.route("/api/run", methods=["POST"])
+@require_token
+@rate_limit(10, 60, "run_code")
+def run_code_sync():
+    body = request.get_json(silent=True) or {}
+    code = body.get("code")
+    if not isinstance(code, str) or not code:
+        return fail("code مطلوب")
+    if len(code) > code_runner.MAX_CODE_SIZE:
+        return fail(f"code يتجاوز الحد ({code_runner.MAX_CODE_SIZE})")
+    if not body.get("i_am_authorized"):
+        return fail("يجب تأكيد التصريح")
+    try:
+        result = code_runner.run_code(None, body)
+    except Exception as exc:
+        return fail(exc)
+    entry = history.add("run", body.get("language", "python"), f"exit={result.get('exit_code')}", result)
+    result["entry_id"] = entry["id"]
+    return ok(result)
 
 
 @app.errorhandler(404)

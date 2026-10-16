@@ -25,7 +25,24 @@ python -m unittest discover -s tests -v
 python server.py
 ```
 
-Open `http://127.0.0.1:8000/` in a browser.
+### Development server (Flask)
+
+```bash
+python server.py
+```
+
+### Production server (Waitress)
+
+```bash
+python run_server.py --host 127.0.0.1 --port 8000
+```
+
+### Windows quick launch
+
+```text
+start_server.bat
+```
+
 
 ## Layout
 

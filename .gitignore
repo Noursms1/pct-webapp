@@ -7,11 +7,18 @@ __pycache__/
 .venv/
 venv/
 
-# PCT runtime
+# PCT runtime artifacts
 scan_history.json
-server.log
+rules.db
+knowledge.db
 server.pid
-*.log
+server.log
+*.pid
+__pycache__/
+*.pyc
+.venv/
+venv/
+
 
 # Local databases
 rules.db
@@ -44,3 +51,39 @@ desktop.ini
 .coverage
 htmlcov/
 .pytest_cache/
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+pct_intelligence.db
+knowledge.db
+
+# Logs & Outputs
+*.log
+test_output.txt
+scan_history.json
+rea_calls.log
+
+# Temporary
+scripts/New Text Document.txt
+
+
+# Python compiled
+__pycache__/
+*.pyc
+*.pyo
+# ============================================
+# AI folder — ignore REA source (installed via npx)
+# Only keep my own agent files
+# ============================================
+ai/*
+!ai/agent.py
+!ai/rea_client.py
+!ai/agent_system_prompt.md
+
+# Ignore everything else in ai (belt and suspenders)
+ai/__pycache__/
+ai/*.log
+ai/node_modules/
+ai/New Text Document.txt
+ai/.gitignore

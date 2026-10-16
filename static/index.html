@@ -127,7 +127,9 @@
   <button data-tab="nuclei">Nuclei</button>
   <button data-tab="report">التقارير</button>
   <button data-tab="runner">المشغّل</button>
+  <button data-tab="agent-ai" class="agent-tab">Agent AI</button>
   <button data-tab="rules">مكتبة القواعد</button>
+  <button data-tab="doctor">التشخيص</button>
   <button data-tab="jobs">المهام الحية</button>
   <button data-tab="history">سجل الفحوصات</button>
 </nav>
@@ -374,8 +376,40 @@
 <!-- ==================== Code Runner ==================== -->
 <section id="tab-runner"><div class="card"><h2>مشغّل الأكواد — Docker Sandbox</h2><div class="alert info" id="runner-warn">🔒 لا شبكة، read-only، cap-drop=ALL.</div><div class="grid g3"><div class="field"><label>اللغة</label><select id="run-lang"></select></div><div class="field"><label>Timeout</label><input id="run-timeout" type="number" value="15" min="1" max="120"></div><div class="field"><label>حد المخرجات KB</label><input id="run-maxout" type="number" value="64" min="1" max="1024"></div></div><textarea id="run-code" rows="12" placeholder="print('Hello')" style="margin-top:12px;direction:ltr;text-align:left"></textarea><div class="row"><button class="primary" onclick="runCodeExec()">تشغيل</button><label class="check"><input type="checkbox" id="run-auth"> أؤكد التصريح</label><span id="run-status" class="badge"></span></div></div><div class="card" id="run-result-card" style="display:none"><h2>النتيجة</h2><div id="run-meta"></div><div id="run-output"></div></div></section>
 
+<!-- ==================== Agent AI ==================== -->
+<section id="tab-agent-ai">
+  <div class="card">
+    <h2>Agent AI — المراجع الذكي</h2>
+    <p class="hint">يراجع عدة ملفات ويقترح أولويات المعالجة.</p>
+    <div class="grid g2">
+      <div class="field"><label>رفع ملفات المشروع</label><input id="agent-files" type="file" multiple></div>
+      <div class="field"><label>هدف الوكيل</label><input id="agent-prompt" value="حلل المشروع وحدد أهم المخاطر"></div>
+    </div>
+    <div class="field" style="margin-top:12px"><label>أو الصق ملفات JSON بصيغة name/content</label><textarea id="agent-json" rows="8" placeholder='[{"name":"app.py","content":"..."}]'></textarea></div>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="runAgentAI()">تشغيل Agent AI</button><button onclick="sendAgentChat()">إرسال للدردشة</button><button onclick="sendToRunner()">فتح في المشغّل</button><button onclick="loadAgentSample()">تحميل مثال</button><span id="agent-status" class="badge">جاهز</span></div>
+  </div>
+    <div class="card">
+      <h2>دردشة Agent</h2>
+      <div id="agent-chat-log" class="empty">اكتب طلبك للوكيل.</div>
+      <div class="row"><input id="agent-chat-input" placeholder="حلل هذا المشروع أو اقترح قاعدة Python"><button class="primary" onclick="sendAgentChat()">إرسال</button></div>
+    </div>
+    <div class="card">
+      <h2>أدوات REA</h2><div class="row"><input id="rea-path" placeholder="مسار ملف تنفيذي تجريبي" style="direction:ltr;text-align:left"><label class="check"><input id="rea-authorized" type="checkbox"> أملك تصريح الفحص</label></div>
+      <div id="rea-tool-buttons" class="row"></div><div id="rea-tool-result"></div>
+    </div>
+    <div class="card">
+      <h2>إدارة مكتبة القواعد</h2>
+      <div class="grid g3"><input id="rule-id" placeholder="RULE-ID"><input id="rule-name" placeholder="اسم القاعدة"><input id="rule-language" placeholder="python"><input id="rule-severity" placeholder="high"><input id="rule-cwe" placeholder="CWE-78"><input id="rule-pattern" placeholder="pattern regex"></div>
+      <div class="row" style="margin-top:10px"><input id="rule-fix" placeholder="الإصلاح المقترح"><label class="check"><input id="rule-confirm" type="checkbox"> أؤكد مراجعة القاعدة</label><button class="primary" onclick="addCustomRule()">إضافة قاعدة</button><button onclick="loadRuleCatalog()">تحديث المكتبة</button></div>
+      <div id="rule-catalog" class="empty"></div>
+    </div>
+</section>
+
 <!-- ==================== Rules Library ==================== -->
 <section id="tab-rules"><div class="card"><h2>مكتبة القواعد</h2><div id="rules-pdf-status" class="badge"></div><div id="rules-stats" class="row"></div><div id="rules-langs" class="grid g3"></div></div><div class="card"><h2>فحص ملفات متعدد اللغات</h2><textarea id="rules-scan-files" rows="10" placeholder='[{"name":"a.py","content":"..."}]'></textarea><button class="primary" onclick="rulesScan()">فحص</button><div id="rules-scan-result"></div></div></section>
+
+<!-- ==================== Doctor ==================== -->
+<section id="tab-doctor"><div class="card"><h2>Doctor — تشخيص النظام</h2><div class="row"><button class="primary" onclick="runDoctor()">فحص</button><button class="small" onclick="loadSystemHealth()">حالة النظام</button></div><div id="doctor-summary"></div><div id="doctor-results"></div></div><div class="card" id="system-health-card" style="display:none"><h2>حالة النظام</h2><div id="system-health"></div></div></section>
 
 <!-- ==================== Jobs ==================== -->
 <section id="tab-jobs">
@@ -973,6 +1007,57 @@ function renderNuclei(result){
 }
 document.querySelector('button[data-tab="nuclei"]')?.addEventListener("click", checkNucleiStatus);
 
+async function runAgentAI(){
+  let files=[];
+  try{
+    if($("agent-json").value.trim()) files=JSON.parse($("agent-json").value);
+    if(!Array.isArray(files)) throw new Error("صيغة JSON غير صحيحة");
+    const selected=$("agent-files").files;
+    if(selected.length){ files=[]; for(const file of selected) files.push({name:file.name,content:await file.text()}); }
+    if(!files.length){alert("ارفع ملفات أو الصق JSON.");return;}
+    $("agent-result-card").style.display="block"; $("agent-status").textContent="جارٍ التحليل...";
+    const result=await api("/api/agent-ai",{method:"POST",body:JSON.stringify({prompt:$("agent-prompt").value,files})});
+    $("agent-status").textContent="اكتمل";
+    $("agent-summary").innerHTML=`<span class="badge">الملفات: ${result.files_scanned}</span><span class="badge">الموجودات: ${result.total_findings}</span><span class="badge">الخطر: ${esc(result.risk_level)}</span>`;
+    $("agent-recommendations").innerHTML=`<div class="alert info"><b>التوصيات:</b><ul>${(result.recommendations||[]).map(item=>`<li>${esc(item)}</li>`).join("")}</ul></div>`;
+    $("agent-result").textContent=JSON.stringify(result,null,2);
+  }catch(e){$("agent-status").textContent="فشل";$("agent-result").textContent=e.message;}
+}
+function loadAgentSample(){ $("agent-json").value=JSON.stringify([{name:"demo.py",content:"import os\\nos.system(user_input)\\nSECRET = 'hardcoded-secret'"}],null,2); }
+
+async function sendAgentChat(){
+  const input=$("agent-chat-input"), message=input.value.trim(); if(!message)return;
+  const log=$("agent-chat-log"); log.innerHTML+=`<div class="hint"><b>أنت:</b> ${esc(message)}</div>`; input.value="";
+  try{const r=await api("/api/agent-chat",{method:"POST",body:JSON.stringify({message})}); log.innerHTML+=`<div class="alert info"><b>Agent:</b> ${esc(r.reply)}<br>${r.actions.map(esc).join("<br>")}</div>`;}catch(e){log.innerHTML+=`<div class="alert">${esc(e.message)}</div>`;}
+}
+
+async function loadREATools(){
+  try{
+    const tools=await api("/api/rea/tools"); const known=tools.length?tools.map(t=>({name:t.name||t.tool?.name,description:t.description||"REA tool"})):[];
+    const fallback=[
+      {name:"annotate_native_function",description:"تحليل وتوثيق الدوال"},
+      {name:"inspect_native_load_image",description:"فحص الصور المحملة"},
+      {name:"inspect_native_data_type",description:"فحص أنواع البيانات"},
+      {name:"inspect_native_instruction",description:"تفكيك الأوامر"},
+      {name:"resolve_native_call_targets",description:"تتبع نداءات الدوال"}
+    ];
+    const list=known.filter(x=>x.name)||fallback; $("rea-tool-buttons").innerHTML=list.map(t=>`<button class="small" onclick="callREATool('${esc(t.name)}')">${esc(t.name)}</button>`).join("");
+  }catch(e){ $("rea-tool-buttons").innerHTML="<span class='badge'>REA غير متصل</span>"; }
+}
+async function callREATool(name){
+  const path=$("rea-path").value.trim(); if(!path){alert("اكتب مسار الملف التجريبي.");return;} if(!$("rea-authorized").checked){alert("أكد التصريح أولاً.");return;}
+  const confirmed=name==="annotate_native_function" && confirm("هذه الأداة قد تضيف توثيقاً. هل توافق؟"); if(name==="annotate_native_function"&&!confirmed)return;
+  try{const r=await api("/api/rea/call",{method:"POST",body:JSON.stringify({tool:name,arguments:{path},confirmed})}); $("rea-tool-result").innerHTML=`<pre>${esc(JSON.stringify(r,null,2))}</pre>`;}catch(e){$("rea-tool-result").innerHTML=`<div class="alert">${esc(e.message)}</div>`;}
+}
+function sendToRunner(){$("run-code").value=$("agent-json").value;document.querySelector('button[data-tab="runner"]').click();}
+async function loadRuleCatalog(){try{const r=await api("/api/rules/catalog");$("rule-catalog").innerHTML=`<pre>${esc(JSON.stringify(r,null,2))}</pre>`;}catch(e){$("rule-catalog").textContent=e.message;}}
+async function addCustomRule(){
+  if(!$("rule-confirm").checked){alert("أكد مراجعة القاعدة.");return;}
+  const body={id:$("rule-id").value,name:$("rule-name").value,language:$("rule-language").value,severity:$("rule-severity").value,cwe:$("rule-cwe").value,pattern_raw:$("rule-pattern").value,fix:$("rule-fix").value,confirmed:true};
+  try{await api("/api/rules/custom",{method:"POST",body:JSON.stringify(body)});loadRuleCatalog();}catch(e){alert(e.message);}
+}
+document.querySelector('button[data-tab="agent-ai"]')?.addEventListener("click",()=>{loadREATools();loadRuleCatalog();});
+
 /* --------------------------- Rules Library ----------------------------- */
 async function loadRuleLibrary(){try{const status=await api('/api/rules/pdf/status');$("rules-pdf-status").textContent=status.pypdf_available?'pypdf متوفر':'pypdf غير متوفر';$("rules-stats").innerHTML=`<span class="badge">PDFs: ${status.store.pdfs}</span><span class="badge">Rules: ${status.store.rules}</span>`;const langs=await api('/api/rules/languages');$("rules-langs").innerHTML=Object.entries(langs).map(([k,v])=>`<div class="stat"><b>${v.count}</b><span>${esc(k)}</span></div>`).join('');}catch(e){$("rules-pdf-status").textContent=esc(e.message);}}
 async function rulesScan(){try{const files=JSON.parse($("rules-scan-files").value||'[]');const r=await api('/api/rules/scan',{method:'POST',body:JSON.stringify({files})});$("rules-scan-result").innerHTML=`<div class="badge">Findings: ${r.total_findings}</div><pre>${esc(JSON.stringify(r.findings,null,2))}</pre>`;}catch(e){$("rules-scan-result").innerHTML=`<div class="alert">${esc(e.message)}</div>`;}}
@@ -982,7 +1067,11 @@ async function runCodeExec(){const code=$("run-code").value;if(!code.trim()){ale
 function clearRunner(){$("run-code").value='';$("run-result-card").style.display='none';}
 
 let _repLastResult = null;
-async function loadHistoryForReport(){
+/* --------------------------- Doctor ------------------------------------ */
+async function runDoctor(){try{const r=await api('/api/doctor/check');$("doctor-summary").innerHTML=`<span class="badge">سليم: ${r.summary.ok||0} · أخطاء: ${r.summary.error||0}</span>`;$("doctor-results").innerHTML=`<pre>${esc(JSON.stringify(r.results,null,2))}</pre>`;}catch(e){$("doctor-summary").innerHTML=`<div class="alert">${esc(e.message)}</div>`;}}
+async function loadSystemHealth(){ $("system-health-card").style.display='block';try{const h=await api('/api/system/health');$("system-health").innerHTML=`<pre>${esc(JSON.stringify(h,null,2))}</pre>`;}catch(e){$("system-health").innerHTML=`<div class="alert">${esc(e.message)}</div>`;} }
+
+async function loadReportHistory(){
   try{
     const list=await api('/api/history?limit=100');
     if(!list.length){ $("rep-history-list").innerHTML='<div class="empty">لا يوجد سجل.</div>'; return; }

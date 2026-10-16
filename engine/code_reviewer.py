@@ -168,13 +168,16 @@ def rules_metadata():
     ]
 
 
-def _mask_secret(snippet):
-    """إخفاء القيمة الحساسة داخل المقطع المعروض."""
+def mask_secret(snippet):
+    """Mask sensitive quoted values in displayed snippets."""
     return re.sub(
-        r"""(["'])([^"']{3,})\1""",
+        r"""([\"\'])([^\"\']{3,})\1""",
         lambda m: m.group(1) + (m.group(2)[:2] + "*" * max(0, len(m.group(2)) - 2)) + m.group(1),
         snippet,
     )
+
+
+_mask_secret = mask_secret
 
 
 def _dedup_regex_and_ast(findings):

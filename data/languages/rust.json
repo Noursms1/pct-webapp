@@ -1,0 +1,410 @@
+{
+  "name": "rust",
+  "version": "1.75+ / 2021 edition",
+  "extensions": [
+    ".rs"
+  ],
+  "description": "Rust systems programming security knowledge base.",
+  "docs_url": "https://doc.rust-lang.org/",
+  "security_rules": [
+    {
+      "id": "RS-SEC-UNSAFE-01",
+      "name": "unsafe block usage",
+      "severity": "high",
+      "pattern": "\\bunsafe\\s*\\{",
+      "desc": "unsafe bypasses Rust safety guarantees.",
+      "fix": "Minimize and document unsafe.",
+      "cwe": "CWE-787"
+    },
+    {
+      "id": "RS-SEC-UNSAFE-02",
+      "name": "transmute misuse",
+      "severity": "critical",
+      "pattern": "\\b(?:std::mem::|mem::)transmute\\b",
+      "desc": "transmute can cause undefined behavior.",
+      "fix": "Prefer safe conversions.",
+      "cwe": "CWE-704"
+    },
+    {
+      "id": "RS-SEC-CMDI-01",
+      "name": "Command::new with variable",
+      "severity": "critical",
+      "pattern": "Command::new\\s*\\(\\s*(?:\\w+|&?format!|user|input|args)",
+      "desc": "Dynamic command binary.",
+      "fix": "Whitelist binaries and pass args separately.",
+      "cwe": "CWE-78",
+      "owasp": "A03:2021"
+    },
+    {
+      "id": "RS-SEC-CMDI-02",
+      "name": "sh -c pattern",
+      "severity": "critical",
+      "pattern": "Command::new\\s*\\(\\s*[\"'](?:sh|bash|/bin/sh|cmd)[\"']",
+      "desc": "Shell invocation.",
+      "fix": "Call the program directly.",
+      "cwe": "CWE-78"
+    },
+    {
+      "id": "RS-SEC-PATH-01",
+      "name": "File::open dynamic path",
+      "severity": "high",
+      "pattern": "File::open\\s*\\(\\s*(?:format!|&?\\w+\\s*\\+)",
+      "desc": "Unvalidated dynamic path.",
+      "fix": "Canonicalize and validate the base path.",
+      "cwe": "CWE-22",
+      "owasp": "A01:2021"
+    },
+    {
+      "id": "RS-SEC-SQLI-01",
+      "name": "SQL query via format",
+      "severity": "critical",
+      "pattern": "(?:query|execute)\\s*\\(\\s*(?:&?format!|[\"']SELECT|`SELECT)",
+      "desc": "SQL interpolation.",
+      "fix": "Use sqlx or diesel bound parameters.",
+      "cwe": "CWE-89",
+      "owasp": "A03:2021"
+    },
+    {
+      "id": "RS-SEC-DESER-01",
+      "name": "serde deserialization",
+      "severity": "medium",
+      "pattern": "serde_(?:yaml|json)::from_str",
+      "desc": "Validate untrusted input size and depth.",
+      "fix": "Use bounded readers and validation.",
+      "cwe": "CWE-400"
+    },
+    {
+      "id": "RS-SEC-TLS-01",
+      "name": "Invalid TLS certificates",
+      "severity": "high",
+      "pattern": "danger_accept_invalid_certs\\s*\\(\\s*true",
+      "desc": "TLS verification disabled.",
+      "fix": "Use trusted root certificates.",
+      "cwe": "CWE-295",
+      "owasp": "A02:2021"
+    },
+    {
+      "id": "RS-SEC-CRYPTO-01",
+      "name": "Weak hash",
+      "severity": "medium",
+      "pattern": "(?:md5|sha1)::|(?:Md5|Sha1)::",
+      "desc": "Weak hash algorithm.",
+      "fix": "Use SHA-256 or stronger.",
+      "cwe": "CWE-327",
+      "owasp": "A02:2021"
+    },
+    {
+      "id": "RS-SEC-RAND-01",
+      "name": "Insecure random",
+      "severity": "medium",
+      "pattern": "rand::thread_rng|thread_rng\\s*\\(\\s*\\)\\.gen",
+      "desc": "Non-cryptographic randomness.",
+      "fix": "Use OsRng.",
+      "cwe": "CWE-338"
+    },
+    {
+      "id": "RS-SEC-SECRET-01",
+      "name": "Hardcoded secret",
+      "severity": "high",
+      "pattern": "(?:password|secret|api_key|token)\\s*[:=]\\s*\"[^\"]{6,}\"",
+      "desc": "Hardcoded credential.",
+      "fix": "Use environment or a secrets manager.",
+      "cwe": "CWE-798",
+      "owasp": "A07:2021"
+    },
+    {
+      "id": "RS-SEC-SSRF-01",
+      "name": "reqwest dynamic URL",
+      "severity": "critical",
+      "pattern": "reqwest::(?:get|post)\\s*\\(\\s*(?:&?\\w+|user|url)",
+      "desc": "Dynamic HTTP URL may enable SSRF.",
+      "fix": "Whitelist domains and block private IPs.",
+      "cwe": "CWE-918",
+      "owasp": "A10:2021"
+    },
+    {
+      "id": "RS-SEC-XSS-01",
+      "name": "Raw HTML template",
+      "severity": "high",
+      "pattern": "\\|\\s*safe\\b|Html::from_string",
+      "desc": "Raw HTML bypasses escaping.",
+      "fix": "Use auto-escaping templates.",
+      "cwe": "CWE-79",
+      "owasp": "A03:2021"
+    },
+    {
+      "id": "RS-SEC-PANIC-01",
+      "name": "unwrap/expect",
+      "severity": "medium",
+      "pattern": "\\.(?:unwrap|expect)\\s*\\(",
+      "desc": "Panics in server/library code.",
+      "fix": "Return Result and propagate errors.",
+      "cwe": "CWE-617"
+    },
+    {
+      "id": "RS-SEC-JWT-01",
+      "name": "JWT insecure decode",
+      "severity": "critical",
+      "pattern": "insecure_decode|Validation::insecure",
+      "desc": "JWT signature is not verified.",
+      "fix": "Use explicit validation algorithms.",
+      "cwe": "CWE-347",
+      "owasp": "A02:2021"
+    },
+    {
+      "id": "RS-SEC-XXE-01",
+      "name": "XML parser",
+      "severity": "medium",
+      "pattern": "quick_xml::Reader|quick_xml::de::from",
+      "desc": "Review external entity handling.",
+      "fix": "Disable external entities.",
+      "cwe": "CWE-611",
+      "owasp": "A05:2021"
+    },
+    {
+      "id": "RS-SEC-TEMP-01",
+      "name": "Predictable temp path",
+      "severity": "medium",
+      "pattern": "/tmp/\\w+",
+      "desc": "Predictable temporary path.",
+      "fix": "Use NamedTempFile.",
+      "cwe": "CWE-377"
+    },
+    {
+      "id": "RS-SEC-LOG-01",
+      "name": "Log injection",
+      "severity": "low",
+      "pattern": "(?:info|warn|error|debug|trace)!\\s*\\([^)]*\\{\\}",
+      "desc": "Unsanitized user data in logs.",
+      "fix": "Sanitize CR/LF.",
+      "cwe": "CWE-117",
+      "owasp": "A09:2021"
+    },
+    {
+      "id": "RS-SEC-SQLI-02",
+      "name": "SQL query format interpolation",
+      "severity": "critical",
+      "pattern": "format!\\s*\\(\\s*[\"\\']SELECT",
+      "desc": "SQL is constructed with format interpolation.",
+      "fix": "Use sqlx or diesel bound parameters.",
+      "cwe": "CWE-89",
+      "owasp": "A03:2021"
+    }
+  ],
+  "engineering_rules": [
+    {
+      "id": "RS-ENG-CLONE-01",
+      "name": "Excessive clone",
+      "severity": "low",
+      "pattern": "\\.clone\\s*\\(\\s*\\)",
+      "desc": "Review large data clones.",
+      "fix": "Prefer references or Arc."
+    },
+    {
+      "id": "RS-ENG-TODO-01",
+      "name": "TODO marker",
+      "severity": "info",
+      "pattern": "\\b(?:TODO|FIXME|unimplemented!)",
+      "desc": "Unresolved marker.",
+      "fix": "Create an issue."
+    },
+    {
+      "id": "RS-ENG-PANIC-01",
+      "name": "panic macro",
+      "severity": "medium",
+      "pattern": "\\bpanic!\\s*\\(",
+      "desc": "Panic can crash a service.",
+      "fix": "Return Result."
+    },
+    {
+      "id": "RS-ENG-INDEX-01",
+      "name": "Direct indexing",
+      "severity": "medium",
+      "pattern": "\\w+\\[\\s*\\w+\\s*\\]",
+      "desc": "May panic out of bounds.",
+      "fix": "Use get()."
+    },
+    {
+      "id": "RS-ENG-AS-01",
+      "name": "Unchecked as cast",
+      "severity": "medium",
+      "pattern": "\\bas\\s+(?:u8|u16|u32|u64|usize|i8|i16|i32|i64)\\b",
+      "desc": "Cast may truncate.",
+      "fix": "Use TryFrom/TryInto.",
+      "cwe": "CWE-190"
+    },
+    {
+      "id": "RS-ENG-MUT-STATIC-01",
+      "name": "static mut",
+      "severity": "high",
+      "pattern": "static\\s+mut\\s+",
+      "desc": "Unsafe global mutable state.",
+      "fix": "Use atomics or Mutex."
+    },
+    {
+      "id": "RS-ENG-ASYNC-01",
+      "name": "async function",
+      "severity": "medium",
+      "pattern": "async\\s+fn\\s+\\w+",
+      "desc": "Review Send and cancellation bounds.",
+      "fix": "Propagate cancellation and bounds."
+    }
+  ],
+  "frameworks": [
+    {
+      "name": "Actix Web",
+      "version": "4.x",
+      "docs_url": "https://actix.rs/",
+      "rules": [
+        {
+          "id": "RS-ACTIX-01",
+          "name": "Permissive CORS",
+          "severity": "high",
+          "pattern": "allow_any_origin",
+          "desc": "Wildcard CORS.",
+          "fix": "Whitelist origins.",
+          "cwe": "CWE-942"
+        }
+      ]
+    },
+    {
+      "name": "Axum",
+      "version": "0.7+",
+      "docs_url": "https://docs.rs/axum/",
+      "rules": [
+        {
+          "id": "RS-AXUM-01",
+          "name": "Payload limit",
+          "severity": "medium",
+          "pattern": "extract::Json|body::Bytes",
+          "desc": "Configure body limits.",
+          "fix": "Use DefaultBodyLimit.",
+          "cwe": "CWE-400"
+        }
+      ]
+    },
+    {
+      "name": "Rocket",
+      "version": "0.5+",
+      "docs_url": "https://rocket.rs/",
+      "rules": [
+        {
+          "id": "RS-ROCKET-01",
+          "name": "Hardcoded secret key",
+          "severity": "high",
+          "pattern": "secret_key\\s*=",
+          "desc": "Secret in config.",
+          "fix": "Use environment secrets.",
+          "cwe": "CWE-798"
+        }
+      ]
+    },
+    {
+      "name": "Tokio",
+      "version": "1.x",
+      "docs_url": "https://tokio.rs/",
+      "rules": [
+        {
+          "id": "RS-TOKIO-01",
+          "name": "block_on",
+          "severity": "high",
+          "pattern": "block_on\\s*\\(",
+          "desc": "May deadlock async runtime.",
+          "fix": "Use await.",
+          "cwe": "CWE-833"
+        }
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "name": "web_backend",
+      "description": "Rust web APIs",
+      "focus": [
+        "SQLi",
+        "SSRF",
+        "Auth"
+      ],
+      "top_risks": [
+        "SQLi",
+        "SSRF"
+      ],
+      "rule_ids": [
+        "RS-SEC-SQLI-01",
+        "RS-SEC-SSRF-01"
+      ]
+    },
+    {
+      "name": "systems_programming",
+      "description": "Systems and embedded",
+      "focus": [
+        "unsafe",
+        "memory"
+      ],
+      "top_risks": [
+        "UB"
+      ],
+      "rule_ids": [
+        "RS-SEC-UNSAFE-01",
+        "RS-SEC-UNSAFE-02"
+      ]
+    },
+    {
+      "name": "async_services",
+      "description": "Tokio services",
+      "focus": [
+        "async",
+        "cancellation"
+      ],
+      "top_risks": [
+        "deadlocks"
+      ],
+      "rule_ids": [
+        "RS-TOKIO-01",
+        "RS-ENG-ASYNC-01"
+      ]
+    },
+    {
+      "name": "cli_tools",
+      "description": "CLI utilities",
+      "focus": [
+        "commands"
+      ],
+      "top_risks": [
+        "RCE"
+      ],
+      "rule_ids": [
+        "RS-SEC-CMDI-01"
+      ]
+    },
+    {
+      "name": "crypto_blockchain",
+      "description": "Crypto applications",
+      "focus": [
+        "crypto",
+        "RNG"
+      ],
+      "top_risks": [
+        "weak crypto"
+      ],
+      "rule_ids": [
+        "RS-SEC-CRYPTO-01",
+        "RS-SEC-RAND-01"
+      ]
+    }
+  ],
+  "best_practices": [
+    {
+      "title": "Minimize unsafe",
+      "description": "Document every unsafe block.",
+      "example_good": "// SAFETY: invariant documented",
+      "example_bad": "unsafe { do_thing() }"
+    },
+    {
+      "title": "Parameterized SQL",
+      "description": "Use bound parameters.",
+      "example_good": "query(...).bind(id)",
+      "example_bad": "format!(...)"
+    }
+  ]
+}

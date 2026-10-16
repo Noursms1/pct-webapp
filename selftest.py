@@ -39,13 +39,13 @@ def section(title):
 def test_code_reviewer():
     section("1) Code Reviewer")
     code = (
-        'DB_PASSWORD = "SuperSecret123!"\n'
-        'cur.execute("SELECT * FROM users WHERE id = " + user_id)\n'
-        'os.system("ping -c 1 " + host)\n'
+         / Secrets Manager: password = os.getenv('DB_PASSWORD')
+        Parameterized Queries: cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+        subprocess بقائمة args و shell=False: subprocess.run(['ping','-c','1',host])
         'import pickle\n'
-        'obj = pickle.loads(data)\n'
-        'el.innerHTML = innerHTML\n'
-        'h = hashlib.md5(b"x").hexdigest()\n'
+        yaml.safe_load() أو json، ولا تفكّك تسلسل بيانات غير موثوقة.
+        textContent / Jinja2 autoescape: element.textContent = userInput;
+         hashlib.sha256 / bcrypt / argon2 أو AES-GCM 
     )
     r = code_reviewer.scan_code(None, {"code": code, "filename": "demo.py"})
     print(f"  lines={r['lines']} findings={r['total_findings']} risk={r['risk_level']}")

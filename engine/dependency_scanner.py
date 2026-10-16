@@ -138,7 +138,8 @@ def scan_requirements_file(path):
 
 
 def _format_requirements_result(filename, packages, audit):
-    return {"file": filename, "type": "requirements", "supported": True, "packages": packages, "packages_parsed": len(packages), "packages_scanned": audit["packages_scanned"], "vulnerabilities": audit["vulnerabilities"], "vulnerabilities_count": len(audit["vulnerabilities"]), "tool": audit["tool"], "tool_available": audit["available"], "error": audit["error"]}
+    vulns = audit["vulnerabilities"]
+    return {"file": filename, "type": "requirements", "supported": True, "packages": packages, "packages_parsed": len(packages), "packages_scanned": audit["packages_scanned"], "vulnerabilities": vulns, "vulnerabilities_count": len(vulns), "severity_counts": _summarize_severity(vulns), "risk_level": _risk_level(vulns), "tool": audit["tool"], "tool_available": audit["available"], "error": audit["error"]}
 
 
 def scan_requirements_content(content, filename="inline_requirements.txt"):

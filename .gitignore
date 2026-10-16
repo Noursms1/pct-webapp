@@ -26,7 +26,8 @@ server.log
 Thumbs.db
 desktop.ini
 
-# Test artifacts
-.coverage
+scripts/.cache/
+engine/languages/_generated/*.json
+
 htmlcov/
 .pytest_cache/

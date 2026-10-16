@@ -358,7 +358,9 @@ def email_recon_sync():
             "email": email,
             "check_gravatar": bool(body.get("check_gravatar", True)),
             "check_github": bool(body.get("check_github", True)),
-        }))
+            "check_breach": bool(body.get("check_breach", True)),
+            "check_rep": bool(body.get("check_rep", True)),
+            "check_domain": bool(body.get("check_domain", True)),        }))
     except Exception as exc:
         return fail(exc)
 

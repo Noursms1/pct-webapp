@@ -355,9 +355,9 @@
 <section id="tab-email">
   <div class="card"><h2>فحص الإيميل</h2><p class="hint">فحص Gravatar وGitHub العام. استخدم عناوين تملك حق فحصها.</p>
     <div class="field"><label>البريد الإلكتروني</label><input id="er-email" type="email" placeholder="user@example.com" style="direction:ltr;text-align:left"></div>
-    <div class="row" style="margin-top:12px"><label class="check"><input type="checkbox" id="er-gravatar-check" checked> Gravatar</label><label class="check"><input type="checkbox" id="er-github-check" checked> GitHub commit search</label><button class="primary" onclick="runEmailRecon()">فحص الإيميل</button></div>
+    <div class="row" style="margin-top:12px"><label class="check"><input type="checkbox" id="er-gravatar-check" checked> Gravatar</label><label class="check"><input type="checkbox" id="er-github-check" checked> GitHub commit search</label><label class="check"><input type="checkbox" id="er-breach-check" checked> HIBP (اختياري)</label><label class="check"><input type="checkbox" id="er-rep-check" checked> EmailRep</label><label class="check"><input type="checkbox" id="er-domain-check" checked> أمان النطاق DoH</label><button class="primary" onclick="runEmailRecon()">فحص الإيميل</button></div>
   </div>
-  <div id="er-result"></div><div id="er-gravatar-result"></div><div id="er-github-result"></div>
+  <div id="er-result"></div><div id="er-gravatar-result"></div><div id="er-github-result"></div><div id="er-breach-result"></div><div id="er-rep-result"></div><div id="er-domain-result"></div>
 </section>
 
 <!-- ==================== Jobs ==================== -->
@@ -918,12 +918,16 @@ function exportSubdomains(format){
 async function runEmailRecon(){
   const email = $("er-email").value.trim();
   if (!email){ alert("أدخل بريدًا إلكترونيًا."); return; }
-  ["er-result", "er-gravatar-result", "er-github-result"].forEach(id => $(id).innerHTML = "");
+  ["er-result", "er-gravatar-result", "er-github-result", "er-breach-result", "er-rep-result", "er-domain-result"].forEach(id => $(id).innerHTML = "");
   $("er-result").innerHTML = `<div class="card"><span class="badge">جارٍ الفحص...</span></div>`;
   try{
-    const body = await api("/api/email/recon", {method:"POST", body:JSON.stringify({email, check_gravatar:$("er-gravatar-check").checked, check_github:$("er-github-check").checked})});
+    const body = await api("/api/email/recon", {method:"POST", body:JSON.stringify({email, check_gravatar:$("er-gravatar-check").checked, check_github:$("er-github-check").checked, check_breach:$("er-breach-check").checked, check_rep:$("er-rep-check").checked, check_domain:$("er-domain-check").checked})});
     $("er-result").innerHTML = `<div class="card"><h2>النتيجة</h2><div class="badge">${esc(body.email)}</div></div>`;
     if (body.gravatar) $("er-gravatar-result").innerHTML = `<div class="card"><h2>Gravatar</h2><div class="alert info">${body.gravatar.exists ? "✔ موجود" : "✘ غير موجود"}</div></div>`;
+    if (body.domain_security) { const ds = body.domain_security; $("er-domain-result").innerHTML = `<div class="card"><h2>أمان النطاق — ${esc(ds.risk.toUpperCase())}</h2><div class="hint">SPF: ${ds.spf ? "✔" : "✘"} · DMARC: ${ds.dmarc ? "✔" : "✘"} · DKIM: ${Object.keys(ds.dkim_selectors || {}).length}</div>${(ds.issues || []).map(issue => `<div class="hint">• ${esc(issue)}</div>`).join("")}</div>`; }
+    if (body.reputation) { const rep = body.reputation; $("er-rep-result").innerHTML = `<div class="card"><h2>EmailRep — السمعة</h2><div class="hint">${esc(rep.reputation || "—")} · References: ${rep.references || 0} · Credentials leaked: ${rep.credentials_leaked ? "نعم" : "لا"}</div></div>`; }
+    if (body.breaches) { const breaches = body.breaches; $("er-breach-result").innerHTML = `<div class="card"><h2>HIBP — التسريبات</h2><div class="alert info">${breaches.available ? (breaches.count ? `عدد التسريبات: ${breaches.count}` : "لا تسريبات معروفة") : esc(breaches.error || "غير متاح")}</div></div>`; }
+
     const github = body.github;
     if (github){
       const message = github.available === false ? esc(github.error || "rate limited") : github.commit_count === 0 ? "✘ لا commits مرتبطة بالإيميل." : `✔ ${github.commit_count} commit · الحسابات: ${(github.usernames || []).map(u => `<a href="https://github.com/${encodeURIComponent(u)}" target="_blank" rel="noopener" class="pill">${esc(u)}</a>`).join(" ") || "—"}<br>المستودعات: ${(github.repos || []).map(repo => `<code>${esc(repo)}</code>`).join(" · ") || "—"}`;

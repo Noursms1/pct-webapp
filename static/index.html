@@ -127,6 +127,7 @@
   <button data-tab="nuclei">Nuclei</button>
   <button data-tab="report">التقارير</button>
   <button data-tab="runner">المشغّل</button>
+  <button data-tab="rules">مكتبة القواعد</button>
   <button data-tab="jobs">المهام الحية</button>
   <button data-tab="history">سجل الفحوصات</button>
 </nav>
@@ -373,6 +374,9 @@
 <!-- ==================== Code Runner ==================== -->
 <section id="tab-runner"><div class="card"><h2>مشغّل الأكواد — Docker Sandbox</h2><div class="alert info" id="runner-warn">🔒 لا شبكة، read-only، cap-drop=ALL.</div><div class="grid g3"><div class="field"><label>اللغة</label><select id="run-lang"></select></div><div class="field"><label>Timeout</label><input id="run-timeout" type="number" value="15" min="1" max="120"></div><div class="field"><label>حد المخرجات KB</label><input id="run-maxout" type="number" value="64" min="1" max="1024"></div></div><textarea id="run-code" rows="12" placeholder="print('Hello')" style="margin-top:12px;direction:ltr;text-align:left"></textarea><div class="row"><button class="primary" onclick="runCodeExec()">تشغيل</button><label class="check"><input type="checkbox" id="run-auth"> أؤكد التصريح</label><span id="run-status" class="badge"></span></div></div><div class="card" id="run-result-card" style="display:none"><h2>النتيجة</h2><div id="run-meta"></div><div id="run-output"></div></div></section>
 
+<!-- ==================== Rules Library ==================== -->
+<section id="tab-rules"><div class="card"><h2>مكتبة القواعد</h2><div id="rules-pdf-status" class="badge"></div><div id="rules-stats" class="row"></div><div id="rules-langs" class="grid g3"></div></div><div class="card"><h2>فحص ملفات متعدد اللغات</h2><textarea id="rules-scan-files" rows="10" placeholder='[{"name":"a.py","content":"..."}]'></textarea><button class="primary" onclick="rulesScan()">فحص</button><div id="rules-scan-result"></div></div></section>
+
 <!-- ==================== Jobs ==================== -->
 <section id="tab-jobs">
   <div class="card">
@@ -447,6 +451,7 @@ document.querySelectorAll("nav button").forEach(btn => {
     $("tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "jobs") loadJobs();
     if (btn.dataset.tab === "history") loadHistory();
+    if (btn.dataset.tab === "rules") loadRuleLibrary();
     if (btn.dataset.tab === "runner") loadRunnerLangs();
     if (btn.dataset.tab === "report") loadHistoryForReport();
     if (btn.dataset.tab === "dash") loadStats();
@@ -968,7 +973,10 @@ function renderNuclei(result){
 }
 document.querySelector('button[data-tab="nuclei"]')?.addEventListener("click", checkNucleiStatus);
 
-/* --------------------------- Code Runner ------------------------------- */
+/* --------------------------- Rules Library ----------------------------- */
+async function loadRuleLibrary(){try{const status=await api('/api/rules/pdf/status');$("rules-pdf-status").textContent=status.pypdf_available?'pypdf متوفر':'pypdf غير متوفر';$("rules-stats").innerHTML=`<span class="badge">PDFs: ${status.store.pdfs}</span><span class="badge">Rules: ${status.store.rules}</span>`;const langs=await api('/api/rules/languages');$("rules-langs").innerHTML=Object.entries(langs).map(([k,v])=>`<div class="stat"><b>${v.count}</b><span>${esc(k)}</span></div>`).join('');}catch(e){$("rules-pdf-status").textContent=esc(e.message);}}
+async function rulesScan(){try{const files=JSON.parse($("rules-scan-files").value||'[]');const r=await api('/api/rules/scan',{method:'POST',body:JSON.stringify({files})});$("rules-scan-result").innerHTML=`<div class="badge">Findings: ${r.total_findings}</div><pre>${esc(JSON.stringify(r.findings,null,2))}</pre>`;}catch(e){$("rules-scan-result").innerHTML=`<div class="alert">${esc(e.message)}</div>`;}}
+
 async function loadRunnerLangs(){try{const langs=await api('/api/run/languages');const select=$("run-lang");select.innerHTML='';Object.entries(langs).forEach(([key,info])=>{const option=document.createElement('option');option.value=key;option.textContent=info.label+(info.present?' ✓':info.docker?' (تنزيل عند التشغيل)':' (Docker غير متوفر)');option.disabled=!info.available;select.appendChild(option);});}catch(e){$("runner-warn").textContent='Docker غير متوفر';}}
 async function runCodeExec(){const code=$("run-code").value;if(!code.trim()){alert('أدخل كودًا');return;}if(!$("run-auth").checked){alert('أكد التصريح أولًا');return;}$("run-result-card").style.display='block';$("run-status").textContent='جارٍ التشغيل...';try{const result=await api('/api/run',{method:'POST',body:JSON.stringify({code,language:$("run-lang").value,timeout:parseInt($("run-timeout").value)||15,max_output:(parseInt($("run-maxout").value)||64)*1024,i_am_authorized:true})});$("run-status").textContent='اكتمل';$("run-meta").innerHTML=`<span class="badge">${esc(result.mode)} · exit=${result.exit_code}</span>`;$("run-output").innerHTML=`${result.error?`<div class="alert">${esc(result.error)}</div>`:''}${result.stdout?`<pre>${esc(result.stdout)}</pre>`:''}${result.stderr?`<pre>${esc(result.stderr)}</pre>`:''}`;}catch(e){$("run-status").textContent='فشل';$("run-output").innerHTML=`<div class="alert">${esc(e.message)}</div>`;}}
 function clearRunner(){$("run-code").value='';$("run-result-card").style.display='none';}

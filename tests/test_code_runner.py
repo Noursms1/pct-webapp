@@ -1,3 +1,11 @@
+import shutil
+import unittest
+
+
+def _docker_available() -> bool:
+    return shutil.which('docker') is not None
+
+
 # -*- coding: utf-8 -*-
 import os, sys, subprocess, unittest
 from unittest import mock
@@ -5,6 +13,8 @@ ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path: sys.path.insert(0, ROOT)
 from engine import code_runner as cr
 
+
+@unittest.skipUnless(_docker_available(), 'Docker not available')
 class TestRunner(unittest.TestCase):
     def test_config_and_validation(self):
         self.assertIn('python',cr.LANGUAGES)

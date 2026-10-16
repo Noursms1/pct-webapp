@@ -125,6 +125,7 @@
   <button data-tab="subdomains">النطاقات الفرعية</button>
   <button data-tab="email">فحص الإيميل</button>
   <button data-tab="nuclei">Nuclei</button>
+  <button data-tab="report">التقارير</button>
   <button data-tab="jobs">المهام الحية</button>
   <button data-tab="history">سجل الفحوصات</button>
 </nav>
@@ -364,6 +365,9 @@
 
 <!-- ==================== Nuclei ==================== -->
 <section id="tab-nuclei"><div class="card"><h2>Nuclei Scanner</h2><p class="hint">فحص اختياري عبر ProjectDiscovery Nuclei. استخدمه على أهداف مصرح بها فقط.</p><div id="nuclei-status" class="alert info">جارٍ التحقق من nuclei...</div><div class="field"><label>الأهداف</label><textarea id="nuclei-targets" rows="6" placeholder="https://example.com"></textarea></div><div class="grid g3"><div class="field"><label>الخطورة</label><input id="nuclei-severity" placeholder="critical,high,medium"></div><div class="field"><label>Tags</label><input id="nuclei-tags" placeholder="cve,rce,xss"></div><div class="field"><label>Rate limit</label><input id="nuclei-rate" type="number" value="50" min="1" max="500"></div></div><div class="row"><button class="primary" onclick="runNuclei()">بدء الفحص</button><button onclick="loadLastSubdomains()">استخدم آخر Subdomains</button></div></div><div class="card" id="nuclei-result-card" style="display:none"><h2>النتائج</h2><div id="nuclei-summary"></div><div id="nuclei-findings"></div></div></section>
+
+<!-- ==================== Reports ==================== -->
+<section id="tab-report"><div class="card"><h2>مولّد التقارير</h2><p class="hint">يجمع نتائج الفحوصات من السجل ويولد HTML أو Markdown أو JSON.</p><div class="grid g2"><div class="field"><label>الصيغة</label><select id="rep-format"><option value="html">HTML</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></div><div class="field"><label>آخر عدد فحوصات</label><input id="rep-lastn" type="number" value="20" min="1" max="200"></div><div class="field"><label>العنوان</label><input id="rep-title" placeholder="PCT Security Report"></div><div class="field"><label>الهدف</label><input id="rep-target" placeholder="example.com"></div></div><div class="row"><button class="primary" onclick="runReport()">توليد التقرير</button><button onclick="downloadReport()">تنزيل</button></div></div><div class="card" id="rep-result-card" style="display:none"><h2>التقرير</h2><div id="rep-summary"></div><div id="rep-output"></div></div></section>
 
 <!-- ==================== Jobs ==================== -->
 <section id="tab-jobs">
@@ -957,6 +961,15 @@ function renderNuclei(result){
   $("nuclei-findings").innerHTML = result.count ? `<table><thead><tr><th>#</th><th>الخطورة</th><th>Template</th><th>الهدف</th><th>Matched</th></tr></thead><tbody>${result.findings.map((finding,index) => `<tr><td>${index+1}</td><td class="sev-${esc(finding.severity)}">${esc(finding.severity)}</td><td><code>${esc(finding.template_id)}</code><div class="hint">${esc(finding.template_name)}</div></td><td class="mono">${esc(finding.host)}</td><td class="mono">${esc(finding.matched_at)}</td></tr>`).join("")}</tbody></table>` : `<div class="alert info">لا توجد نتائج.</div>`;
 }
 document.querySelector('button[data-tab="nuclei"]')?.addEventListener("click", checkNucleiStatus);
+
+/* --------------------------- Reports ----------------------------------- */
+let _repLastResult = null;
+async function runReport(){
+  $("rep-result-card").style.display="block"; $("rep-summary").innerHTML='<span class="badge">جارٍ التوليد...</span>';
+  try { const result=await api('/api/report/generate',{method:'POST',body:JSON.stringify({format:$("rep-format").value,last_n:parseInt($("rep-lastn").value)||20,title:$("rep-title").value.trim()||null,target:$("rep-target").value.trim()||null})}); _repLastResult=result; renderReport(result); } catch(error) { $("rep-summary").innerHTML=`<div class="alert">فشل: ${esc(error.message)}</div>`; }
+}
+function renderReport(result){ const summary=result.summary||{}; $("rep-summary").innerHTML=`<span class="badge">الصيغة: <b>${esc(result.format)}</b></span><span class="badge">Findings: <b>${summary.total||0}</b></span><span class="badge">Risk: <b>${esc(summary.risk||'none')}</b></span>`; const output=$("rep-output"); output.innerHTML=result.format==='html'?`<iframe srcdoc="${esc(result.content)}" style="width:100%;height:600px;border:1px solid var(--line)"></iframe>`:`<pre style="max-height:600px;overflow:auto">${esc(result.format==='json'?JSON.stringify(result.content,null,2):result.content)}</pre>`; }
+function downloadReport(){ if(!_repLastResult){alert('ولّد التقرير أولاً.');return;} const r=_repLastResult; const content=r.format==='json'?JSON.stringify(r.content,null,2):r.content; const link=document.createElement('a'); link.href=URL.createObjectURL(new Blob([content],{type:r.mime})); link.download=`pct_report_${Date.now()}.${r.format}`; link.click(); }
 
 /* --------------------------- History ----------------------------------- */
 async function loadHistory(){

@@ -53,6 +53,7 @@ from engine import dependency_scanner
 from engine import subdomain_enum
 from engine import email_recon
 from engine import nuclei_scanner
+from engine import report_generator
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -386,6 +387,21 @@ def nuclei_scan_sync():
 @app.route("/api/nuclei/info")
 def nuclei_info():
     return ok({"available": nuclei_scanner.nuclei_available(), "path": nuclei_scanner.nuclei_path(), "version": nuclei_scanner.nuclei_version()})
+
+
+@app.route("/api/report/formats")
+def report_formats():
+    return ok([{"id": "html", "label": "HTML"}, {"id": "markdown", "label": "Markdown"}, {"id": "json", "label": "JSON"}])
+
+
+@app.route("/api/report/generate", methods=["POST"])
+@require_token
+def report_generate():
+    body = request.get_json(silent=True) or {}
+    try:
+        return ok(report_generator.generate_report(None, {"history_file": HISTORY_FILE, "entry_ids": body.get("entry_ids"), "last_n": int(body.get("last_n", 20)), "target": body.get("target"), "title": body.get("title"), "format": body.get("format", "html")}))
+    except Exception as exc:
+        return fail(exc)
 
 
 @app.errorhandler(404)

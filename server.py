@@ -52,6 +52,7 @@ from engine import osint_dns
 from engine import dependency_scanner
 from engine import subdomain_enum
 from engine import email_recon
+from engine import nuclei_scanner
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -107,6 +108,10 @@ def run_email(job, params):
     return email_recon.recon_email(job, _prepare(params, job))
 
 
+def run_nuclei(job, params):
+    return nuclei_scanner.scan_with_nuclei(job, _prepare(params, job))
+
+
 JOB_RUNNERS = {
     "code": (run_code, lambda p: (p.get("filename") or "inline_code")),
     "network": (run_network, lambda p: p.get("target", "")),
@@ -115,6 +120,7 @@ JOB_RUNNERS = {
     "deps": (run_dependencies, lambda p: p.get("path") or ((p.get("files") or [{}])[0].get("name", "inline"))),
     "subdomains": (run_subdomains, lambda p: p.get("domain", "")),
     "email": (run_email, lambda p: p.get("email", "")),
+    "nuclei": (run_nuclei, lambda p: (p.get("targets") or ["?"])[0] if isinstance(p.get("targets"), list) else str(p.get("targets") or "?")),
 }
 
 
@@ -363,6 +369,23 @@ def email_recon_sync():
             "check_domain": bool(body.get("check_domain", True)),        }))
     except Exception as exc:
         return fail(exc)
+
+
+@app.route("/api/nuclei/scan", methods=["POST"])
+@require_token
+def nuclei_scan_sync():
+    body = request.get_json(silent=True) or {}
+    if not body.get("targets"):
+        return fail("targets مطلوبة")
+    try:
+        return ok(nuclei_scanner.scan_with_nuclei(None, body))
+    except Exception as exc:
+        return fail(exc)
+
+
+@app.route("/api/nuclei/info")
+def nuclei_info():
+    return ok({"available": nuclei_scanner.nuclei_available(), "path": nuclei_scanner.nuclei_path(), "version": nuclei_scanner.nuclei_version()})
 
 
 @app.errorhandler(404)

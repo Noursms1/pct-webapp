@@ -123,6 +123,8 @@
   <button data-tab="hash">الهاشات</button>
   <button data-tab="deps">المكتبات</button>
   <button data-tab="subdomains">النطاقات الفرعية</button>
+  <button data-tab="email">فحص الإيميل</button>
+  <button data-tab="nuclei">Nuclei</button>
   <button data-tab="jobs">المهام الحية</button>
   <button data-tab="history">سجل الفحوصات</button>
 </nav>
@@ -359,6 +361,9 @@
   </div>
   <div id="er-result"></div><div id="er-gravatar-result"></div><div id="er-github-result"></div><div id="er-breach-result"></div><div id="er-rep-result"></div><div id="er-domain-result"></div>
 </section>
+
+<!-- ==================== Nuclei ==================== -->
+<section id="tab-nuclei"><div class="card"><h2>Nuclei Scanner</h2><p class="hint">فحص اختياري عبر ProjectDiscovery Nuclei. استخدمه على أهداف مصرح بها فقط.</p><div id="nuclei-status" class="alert info">جارٍ التحقق من nuclei...</div><div class="field"><label>الأهداف</label><textarea id="nuclei-targets" rows="6" placeholder="https://example.com"></textarea></div><div class="grid g3"><div class="field"><label>الخطورة</label><input id="nuclei-severity" placeholder="critical,high,medium"></div><div class="field"><label>Tags</label><input id="nuclei-tags" placeholder="cve,rce,xss"></div><div class="field"><label>Rate limit</label><input id="nuclei-rate" type="number" value="50" min="1" max="500"></div></div><div class="row"><button class="primary" onclick="runNuclei()">بدء الفحص</button><button onclick="loadLastSubdomains()">استخدم آخر Subdomains</button></div></div><div class="card" id="nuclei-result-card" style="display:none"><h2>النتائج</h2><div id="nuclei-summary"></div><div id="nuclei-findings"></div></div></section>
 
 <!-- ==================== Jobs ==================== -->
 <section id="tab-jobs">
@@ -935,6 +940,23 @@ async function runEmailRecon(){
     }
   }catch(error){ $("er-result").innerHTML = `<div class="card"><div class="alert">فشل الفحص: ${esc(error.message)}</div></div>`; }
 }
+
+/* --------------------------- Nuclei ------------------------------------ */
+let _lastSubdomains = null;
+function loadLastSubdomains(){ if (!_lastSubdomains || !_lastSubdomains.length) { alert("لا توجد Subdomains محفوظة."); return; } $("nuclei-targets").value = _lastSubdomains.slice(0,100).join("\n"); }
+async function checkNucleiStatus(){ try { const status = await api("/api/nuclei/info"); $("nuclei-status").innerHTML = status.available ? `✅ nuclei متاح · <code>${esc(status.version || status.path)}</code>` : `⚠️ nuclei غير مثبّت — راجع <a href="https://github.com/projectdiscovery/nuclei/releases" target="_blank" rel="noopener">الإصدارات</a>`; } catch (error) {} }
+async function runNuclei(){
+  const raw = $("nuclei-targets").value.trim(); if (!raw) { alert("أدخل أهدافًا."); return; }
+  const targets = raw.split(/[\n,]+/).map(value => value.trim()).filter(Boolean);
+  $("nuclei-result-card").style.display = "block"; $("nuclei-summary").innerHTML = `<span class="badge">جارٍ الفحص...</span>`; $("nuclei-findings").innerHTML = "";
+  try { const result = await api("/api/nuclei/scan", {method:"POST", body:JSON.stringify({targets, severity:$("nuclei-severity").value.split(",").map(x=>x.trim()).filter(Boolean), tags:$("nuclei-tags").value.split(",").map(x=>x.trim()).filter(Boolean), rate_limit:parseInt($("nuclei-rate").value) || 50})}); renderNuclei(result); } catch (error) { $("nuclei-summary").innerHTML = `<div class="alert">فشل: ${esc(error.message)}</div>`; }
+}
+function renderNuclei(result){
+  if (!result.available) { $("nuclei-findings").innerHTML = `<div class="alert">${esc(result.errors[0] || "nuclei غير متاح")}</div>`; return; }
+  const counts = result.severity_counts || {}; $("nuclei-summary").innerHTML = `<span class="badge">أهداف: <b>${result.targets.length}</b></span><span class="badge">نتائج: <b>${result.count}</b></span>${Object.entries(counts).map(([key,value]) => `<span class="pill ${esc(key)}">${esc(key)}: ${value}</span>`).join("")}`;
+  $("nuclei-findings").innerHTML = result.count ? `<table><thead><tr><th>#</th><th>الخطورة</th><th>Template</th><th>الهدف</th><th>Matched</th></tr></thead><tbody>${result.findings.map((finding,index) => `<tr><td>${index+1}</td><td class="sev-${esc(finding.severity)}">${esc(finding.severity)}</td><td><code>${esc(finding.template_id)}</code><div class="hint">${esc(finding.template_name)}</div></td><td class="mono">${esc(finding.host)}</td><td class="mono">${esc(finding.matched_at)}</td></tr>`).join("")}</tbody></table>` : `<div class="alert info">لا توجد نتائج.</div>`;
+}
+document.querySelector('button[data-tab="nuclei"]')?.addEventListener("click", checkNucleiStatus);
 
 /* --------------------------- History ----------------------------------- */
 async function loadHistory(){
